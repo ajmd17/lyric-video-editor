@@ -2,6 +2,8 @@
 <html>
   <head>
     <meta charset="UTF-8">
+    <!-- Dark theme -->
+    <link href="css/jquery.timespace.dark.css" rel="stylesheet">
     <style>
       html, body {
         font-family: sans-serif;
@@ -33,7 +35,8 @@
         font-size: 22px;
       }
 
-      .track-element {
+      .track-element,
+      #stanza-lines-overlay .line {
         position: absolute;
         height: 30px;
         min-width: 40px;
@@ -55,15 +58,24 @@
         content: "";
         width: 0; 
         height: 0;
-        top: -7px;
+
+        top: 30px;
         margin-left: -7px;
         border-left: 7px solid transparent;
         border-right: 7px solid transparent;
         border-bottom: 7px solid red;
+        transform: rotateZ(180deg);
       }
 
-      #track-elements {
-        width: 100%;
+      #track-elements,
+      #stanza-lines-overlay {
+        position: relative;
+        overflow-x: hidden;
+        display: block;
+        margin-top: 10px;
+        min-height: 50px;
+        box-sizing: content-box;
+        /* width: 100%; */
         font-size: 10px;
       }
 
@@ -144,20 +156,20 @@
       }
 
 
-      #stanza-lines-overlay {
+      /* #stanza-lines-overlay {
         position: absolute;
         width: 100%;
         z-index: 10;
         top: 0;
-      }
+      } */
       #stanza-lines-overlay .line {
-        position: absolute;
-        display: inline-block;
+        /* position: absolute; */
+        /* display: inline-block; */
         background: blue;
-        color: white;
+        /* color: white; */
         width: 60px;
-        font-size: 12px;
-        z-index: 10;
+        /* font-size: 12px; */
+        /* z-index: 10; */
       }
       #stanza-lines-overlay .line .progress-container {
         width: 100%;
@@ -172,14 +184,14 @@
       #stanza-lines-overlay .line progress {
         width: 100%;
       }
-      #stanza-lines-overlay .line .content {
+      /* #stanza-lines-overlay .line .content {
         padding: 2px 3px;
-      }
-      #stanza-lines-overlay .line .arrow:after {
+      } */
+      /* #stanza-lines-overlay .line .arrow:after {
         top: 0;
         border-bottom-color: blue;
         transform: rotateZ(180deg);
-      }
+      } */
     </style>
   </head>
   <body>
@@ -208,8 +220,14 @@
           </div>
         </div>
         <video id="main-video" src='data/seeing red.mp4' controls controlslist="nofullscreen nodownload"></video>
-        <div id="track-elements"></div>
-        <div id="stanza-lines-overlay"></div>
+        
+        
+        <div id="wavesurfer">
+          <div id="stanza-lines-overlay"></div>
+          <div id="track-elements"></div>
+
+        </div>
+
       </div>
 
       <div class="lyrics">
@@ -279,11 +297,11 @@
       </div>
 
     </div>
-    <div>
+    <!-- <div>
       <code id="output-json">
         
       </code>
-    </div>
+    </div> -->
 
     <script
       src="https://code.jquery.com/jquery-3.4.1.min.js"
@@ -293,6 +311,8 @@
       src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"
       integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU="
       crossorigin="anonymous"></script>
+    <script src="js/jquery.timespace.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.15/lodash.min.js" integrity="sha256-VeNaFBVDhoX3H+gJ37DpT/nTuZTdjYro9yBruHjVmoQ=" crossorigin="anonymous"></script>
     <script src='js/syllables.js'></script>
     <script src='js/lyrics.js'></script>

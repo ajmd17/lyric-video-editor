@@ -1,3 +1,5 @@
+const PIXELS_PER_SEC = 10
+
 class Lyrics {
   constructor(lyrics) {
     this.originalLyrics = lyrics
@@ -39,6 +41,7 @@ class Stanza {
     this.originalStanza = stanza
     this.duration = duration
     this.offset = offset
+    this.$element = null
 
     if (_.isEmpty(stanza)) {
       this.lines = []
@@ -84,6 +87,7 @@ class Line {
     this.originalLine = line
     this.duration = duration
     this.offset = offset
+    this.$element = null
 
     /** @type {string[]} */
     this.syllables = this._buildSyllables()
@@ -273,9 +277,14 @@ class LyricsBuilder {
       </div>
     `)
 
-    $element.offset({
-      top: this._mainVideoElement.position().top + this._mainVideoElement.height(),
-      left: this._mainVideoElement.position().left + (this._mainVideoElement.width() * percentage)
+    // $element.offset({
+    //   top: this._mainVideoElement.position().top + this._mainVideoElement.height(),
+    //   left: this._mainVideoElement.position().left + (this._mainVideoElement.width() * percentage)
+    // })
+
+    $element.css({
+      //'margin-left': this._mainVideoElement.position().top + this._mainVideoElement.height(),
+      left: PIXELS_PER_SEC * stanza.offset
     })
 
     $element.find('.time-offset').click((event) => {
@@ -285,8 +294,10 @@ class LyricsBuilder {
     })
 
     $element.on('drag', () => {
-      const percentage = $element.position().left / this._mainVideoElement.width(),
-        offset = this._totalDuration * percentage
+      // const percentage = $element.position().left / $('#track-elements').width(),
+      //   offset = this._totalDuration * percentage
+
+      const offset = $element.position().left / PIXELS_PER_SEC
 
       stanza.offset = offset
 
@@ -296,73 +307,91 @@ class LyricsBuilder {
         .attr('data-seconds', offset.toFixed(2))
         .html(getTimeHHMMSS(offset))
 
+      this.update(this._currentTime, { force: true })
+
       this.storeState()
     })
 
     return $element
   }
 
-  update(timeSeconds) {
+  _createLineElement(line, stanza, index) {
+    const $lineElement = $(`
+      <div class="line" data-line-index="${index}">
+        <div class="progress-container">
+          <span class="time-elapsed"></span>
+          <progress value="0" max="100"></progress>
+        </div>
+        <div class="content">
+        ${_.truncate(line.originalLine, { length: 40 })}
+        </div>
+        <div class="arrow"></div>
+      </div>
+    `)
+
+    // const percentage = line.offset / stanza.duration
+
+    // $lineElement.offset({
+    //   top: this._mainVideoElement.position().top + this._mainVideoElement.height() - 150,
+    //   left: this._mainVideoElement.position().left + (this._mainVideoElement.width() * percentage)
+    // })
+
+    $lineElement.offset({
+      left: PIXELS_PER_SEC * (stanza.offset + line.offset)
+    })
+
+    $lineElement.on('drag', () => {
+      //const percentage = (stanza.$element.position().left - $lineElement.position().left
+
+      line.offset = (($lineElement.position().left) / PIXELS_PER_SEC) - (stanza.$element.position().left / PIXELS_PER_SEC)
+
+      stanza.updateLineDurations()
+
+      this.storeState()
+    })
+
+    return $lineElement
+  }
+
+  update(timeSeconds, options = { force: false }) {
+    window.wavesurfer.seekTo(timeSeconds / this._totalDuration)
     // update current overlay on screen
-    const newStanza = _.last(
-      _.sortBy(
-        _.filter(
-          this._currentLyricsObject.stanzas,
-          (stanza) => timeSeconds >= stanza.offset 
-        ),
-        'offset'
-      )
+    const stanzasSorted = _.sortBy(
+      _.filter(
+        this._currentLyricsObject.stanzas,
+        (stanza) => timeSeconds >= stanza.offset 
+      ),
+      'offset'
     )
 
-    if (newStanza != this._currentStanza) {
-      this._stanzaLinesOverlay.empty()
+    const newStanza = _.last(stanzasSorted)
 
-      newStanza.lines.forEach((line, index) => {
-        const $lineElement = $(`
-          <div class="line" data-line-index="${index}">
-            <div class="progress-container">
-              <span class="time-elapsed"></span>
-              <progress value="0" max="100"></progress>
-            </div>
-            <div class="content">
-            ${_.truncate(line.originalLine, { length: 40 })}
-            </div>
-            <div class="arrow"></div>
-          </div>
-        `)
-
-        const percentage = line.offset / newStanza.duration
-
-        $lineElement.offset({
-          top: this._mainVideoElement.position().top + this._mainVideoElement.height() - 150,
-          left: this._mainVideoElement.position().left + (this._mainVideoElement.width() * percentage)
-        })
-
-        $lineElement.on('drag', () => {
-          const percentage = $lineElement.position().left / this._mainVideoElement.width(),
-            offset = newStanza.duration * percentage
-
-          line.offset = offset
-
-          console.log('duration before: ', line.duration)
-
-          newStanza.updateLineDurations()
-
-          console.log('duration after: ', line.duration)
-
-          this.storeState()
-        })
-
-        $lineElement.draggable({
-          axis: 'x',
-          containment: 'parent'
-        })
-
-        this._stanzaLinesOverlay.append($lineElement)
-      })
-
-      this._currentStanza = newStanza
+    if (!newStanza) {
+      return
     }
+
+    this._currentLyricsObject.stanzas.forEach((stanza) => {
+      if (!_.isEmpty(stanza.$element)) {
+        if (!stanza.$element.hasClass('ui-draggable-dragging')) {
+          stanza.$element.offset({
+            left: PIXELS_PER_SEC * stanza.offset
+          })
+        }
+
+        stanza.lines.forEach((line) => {
+          if (!_.isEmpty(line.$element)) {
+
+            if (!line.$element.hasClass('ui-draggable-dragging')) {
+              line.$element.offset({
+                left: PIXELS_PER_SEC * (stanza.offset + line.offset)
+              })
+            }
+          }
+        })
+      }
+    })
+
+    this._currentStanza = newStanza
 
     const linesSortedIndices = _.sortBy(
       _.filter(
@@ -376,58 +405,60 @@ class LyricsBuilder {
     const linesSorted = _.map(linesSortedIndices, ({ index }) => this._currentStanza.lines[index])
 
     // update line progress
-    linesSorted.forEach((line, index) => {
+    /*linesSorted.forEach((line, index) => {
       const $element = this._stanzaLinesOverlay.find(`[data-line-index=${index}]`),
         relativeTime = Math.min(this._currentTime - this._currentStanza.getAbsoluteTimeOfLine(line), line.duration),
         progressValue = (relativeTime / line.duration) * 100
 
-      if (index == currentLineIndex) {
+      if (line == currentLineIndex) {
         $element.find('.time-elapsed').show().html(relativeTime.toFixed(2) + ' / ' + line.duration.toFixed(2))
       } else {
         $element.find('.time-elapsed').hide()
       }
 
       $element.find('progress').val(progressValue)
-    })
+    })*/
 
     const newLine = this._currentStanza.lines[currentLineIndex]
 
-    if (newLine != this._currentLine) {
+    if (newLine != this._currentLine || options.force) {
       this._lineOverlay.width(this._mainVideoElement.width())
       this._lineOverlay.height(this._mainVideoElement.height())
 
       const $line = $('<div class="line"></div>')
 
-      newLine.syllables.forEach((syllable, syllableIndex) => {
-        const $syllable = $(`
-          <span class="syllable" data-syllable-index="${syllableIndex}">
-            <div class="positive">
-              <span>${syllable.syllable}</span>
-            </div>
-            <div class="negative">
-              <span>${syllable.syllable}</span>
-            </div>
-          </span>
-        `)
+      if (newLine && !_.isEmpty(newLine.syllables)) {
+        newLine.syllables.forEach((syllable, syllableIndex) => {
+          const $syllable = $(`
+            <span class="syllable" data-syllable-index="${syllableIndex}">
+              <div class="positive">
+                <span>${syllable.syllable}</span>
+              </div>
+              <div class="negative">
+                <span>${syllable.syllable}</span>
+              </div>
+            </span>
+          `)
 
-        $syllable.draggable({
-          axis: 'x',
-          containment: 'parent'
+          $syllable.draggable({
+            axis: 'x',
+            containment: 'parent'
+          })
+
+          $syllable.on('drag', (event) => {
+            const percentage = $syllable.position().left / this._mainVideoElement.width(),
+              offset = newLine.duration * percentage
+
+            syllable.offset = offset
+
+            newLine.updateSyllableDurations()
+
+            this.storeState()
+          })
+
+          $line.append($syllable)
         })
-
-        $syllable.on('drag', (event) => {
-          const percentage = $syllable.position().left / this._mainVideoElement.width(),
-            offset = newLine.duration * percentage
-
-          syllable.offset = offset
-
-          newLine.updateSyllableDurations()
-
-          this.storeState()
-        })
-
-        $line.append($syllable)
-      })
+      }
       
       this._lineOverlay.empty().append($line)
 
@@ -482,8 +513,6 @@ class LyricsBuilder {
       const currentLineIndex = this._currentStanza.lines.indexOf(this._currentLine)
       let newLine,
         offset
-
-      console.log('currentLineIndex', currentLineIndex)
 
       if (currentLineIndex == 0) {
         let newStanzaIndex = Math.max(this._currentStanzaIndex - 1, 0),
@@ -549,12 +578,15 @@ class LyricsBuilder {
 
       const $element = this._createStanzaElement(stanza, index)
 
+      stanza.$element = $element
+
       $(trackElements).append($element)
 
       $element.draggable({
         axis: 'x',
         containment: 'parent'
       })
+
     })
 
     // setup stanza durations
@@ -564,6 +596,17 @@ class LyricsBuilder {
     this._currentLyricsObject.stanzas.forEach((stanza) => {
       stanza.lines.forEach((line, lineIndex) => {
         line.offset = (lineIndex / stanza.lines.length) * stanza.duration
+
+        // create element for line
+        const $lineElement = this._createLineElement(line, stanza, lineIndex)
+        line.$element = $lineElement
+
+        this._stanzaLinesOverlay.append($lineElement)
+
+        $lineElement.draggable({
+          axis: 'x',
+          containment: 'parent'
+        })
       })
 
       stanza.updateLineDurations()
@@ -576,6 +619,25 @@ class LyricsBuilder {
 
         line.updateSyllableDurations()
       })
+    })
+
+    window.wavesurfer = WaveSurfer.create({
+      container: document.querySelector('#wavesurfer'),
+      backend: 'MediaElement',
+      fillParent: true,
+      interact: false,
+      pixelRatio: 1,
+      // hideScrollbar: true,
+      loopSelection: false
+    })
+
+    window.wavesurfer.load($('video')[0].src)
+    window.wavesurfer.zoom(PIXELS_PER_SEC)
+    window.wavesurfer.on('scroll', (event) => {
+      let scrollRatio = event.target.scrollLeft / $(event.target).width()
+
+      $('#track-elements')[0].scrollLeft = $('#track-elements').width() * scrollRatio
+      $('#stanza-lines-overlay')[0].scrollLeft = $('#stanza-lines-overlay').width() * scrollRatio
     })
 
     this.storeState()
@@ -628,10 +690,10 @@ class LyricsBuilder {
 
       this._currentLyricsObject.stanzas.push(stanza)
 
-      _.tap(this._createStanzaElement(stanza, index), ($element) => {
-        $('#track-elements').append($element)
+      _.tap(this._createStanzaElement(stanza, index), ($stanza) => {
+        $('#track-elements').append($stanza)
 
-        $element.draggable({ axis: 'x', containment: 'parent' })
+        $stanza.draggable({ axis: 'x', containment: 'parent' })
       })
     })
   }
@@ -711,6 +773,7 @@ $(function () {
     lyricsBuilder.update(video.currentTime)
     // video.setAttribute('controls', 'controls')
   })
+
 })
 
 window.lyricsBuilder = new LyricsBuilder()
