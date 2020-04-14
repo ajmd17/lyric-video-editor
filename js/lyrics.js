@@ -1,4 +1,5 @@
-const PIXELS_PER_SEC = 10
+const PIXELS_PER_SEC = 10,
+  FRAMES_PER_SECOND = 30
 
 class Lyrics {
   constructor(lyrics) {
@@ -6,6 +7,19 @@ class Lyrics {
 
     /** @type {Stanza[]} */
     this.stanzas = this._buildStanzas()
+  }
+
+  stanzaAtTime(timeSeconds) {
+    // update current overlay on screen
+    const stanzasSorted = _.sortBy(
+      _.filter(
+        this.stanzas,
+        (stanza) => timeSeconds >= stanza.offset 
+      ),
+      'offset'
+    )
+
+    return _.last(stanzasSorted)
   }
 
   updateStanzaDurations(videoDuration) {
@@ -51,6 +65,18 @@ class Stanza {
     }
   }
 
+  lineIndexAtTime(timeSeconds) {
+    const linesSortedIndices = _.sortBy(
+      _.filter(
+        this.lines.map((line, index) => ({ time: this.getAbsoluteTimeOfLine(line), index })),
+        ({ time }) => timeSeconds >= time 
+      ),
+      'time'
+    )
+
+    return _.isEmpty(linesSortedIndices) ? -1 : _.last(linesSortedIndices).index
+  }
+
   updateLineDurations() {
     // setup line durations
     this.lines.forEach((line, lineIndex) => {
@@ -91,6 +117,28 @@ class Line {
 
     /** @type {string[]} */
     this.syllables = this._buildSyllables()
+  }
+
+  syllablePercentagesAtTime(timeSeconds, stanzaOffset) {
+    const syllablesSortedIndices = _.sortBy(
+      _.filter(
+        this.syllables.map((syllable, index) => ({ time: this.getAbsoluteTimeOfSyllable(syllable), index })),
+        ({ time }) => timeSeconds >= time 
+      ),
+      'time'
+    )
+
+    const syllablesSorted = _.map(syllablesSortedIndices, ({ index }) => this.syllables[index])
+
+    // [[syllable, percentage], ...]
+
+    // update syllable progress
+    return syllablesSorted.map((syllable) => {
+      const relativeTime = Math.min(timeSeconds - (stanzaOffset + this.offset + syllable.offset), syllable.duration),
+        progressValue = (relativeTime / syllable.duration)
+
+      return [syllable, progressValue]
+    })
   }
 
   updateSyllableDurations() {
@@ -355,20 +403,7 @@ class LyricsBuilder {
 
   update(timeSeconds, options = { force: false }) {
     window.wavesurfer.seekTo(timeSeconds / this._totalDuration)
-    // update current overlay on screen
-    const stanzasSorted = _.sortBy(
-      _.filter(
-        this._currentLyricsObject.stanzas,
-        (stanza) => timeSeconds >= stanza.offset 
-      ),
-      'offset'
-    )
-
-    const newStanza = _.last(stanzasSorted)
-
-    if (!newStanza) {
-      return
-    }
+    const newStanza = this._currentLyricsObject.stanzaAtTime(timeSeconds)
 
     this._currentLyricsObject.stanzas.forEach((stanza) => {
       if (!_.isEmpty(stanza.$element)) {
@@ -393,31 +428,8 @@ class LyricsBuilder {
 
     this._currentStanza = newStanza
 
-    const linesSortedIndices = _.sortBy(
-      _.filter(
-        this._currentStanza.lines.map((line, index) => ({ time: this._currentStanza.getAbsoluteTimeOfLine(line), index })),
-        ({ time }) => timeSeconds >= time 
-      ),
-      'time'
-    )
-
-    const currentLineIndex = _.isEmpty(linesSortedIndices) ? -1 : _.last(linesSortedIndices).index
-    const linesSorted = _.map(linesSortedIndices, ({ index }) => this._currentStanza.lines[index])
-
-    // update line progress
-    /*linesSorted.forEach((line, index) => {
-      const $element = this._stanzaLinesOverlay.find(`[data-line-index=${index}]`),
-        relativeTime = Math.min(this._currentTime - this._currentStanza.getAbsoluteTimeOfLine(line), line.duration),
-        progressValue = (relativeTime / line.duration) * 100
-
-      if (line == currentLineIndex) {
-        $element.find('.time-elapsed').show().html(relativeTime.toFixed(2) + ' / ' + line.duration.toFixed(2))
-      } else {
-        $element.find('.time-elapsed').hide()
-      }
-
-      $element.find('progress').val(progressValue)
-    })*/
+    const currentLineIndex = this._currentStanza.lineIndexAtTime(timeSeconds)
+    //const linesSorted = _.map(linesSortedIndices, ({ index }) => this._currentStanza.lines[index])
 
     const newLine = this._currentStanza.lines[currentLineIndex]
 
@@ -465,23 +477,12 @@ class LyricsBuilder {
       this._currentLine = newLine
     }
 
-    const syllablesSortedIndices = _.sortBy(
-      _.filter(
-        this._currentLine.syllables.map((syllable, index) => ({ time: this._currentLine.getAbsoluteTimeOfSyllable(syllable), index })),
-        ({ time }) => timeSeconds >= time 
-      ),
-      'time'
-    )
+    const syllablePercentagePairs = this._currentLine.syllablePercentagesAtTime(timeSeconds, this._currentStanza.offset)
 
-    const syllablesSorted = _.map(syllablesSortedIndices, ({ index }) => this._currentLine.syllables[index])
+    syllablePercentagePairs.forEach(([syllable, percentage], index) => {
+      const $element = this._lineOverlay.find(`[data-syllable-index=${index}]`)
 
-    // update syllable progress
-    syllablesSorted.forEach((syllable, index) => {
-      const $element = this._lineOverlay.find(`[data-syllable-index=${index}]`),
-        relativeTime = Math.min(this._currentTime - (this._currentStanza.offset + this._currentLine.offset + syllable.offset), syllable.duration),
-        progressValue = (relativeTime / syllable.duration) * 100
-
-      $element.find('.negative').css('width', progressValue + '%')
+      $element.find('.negative').css('width', (percentage * 100) + '%')
     })
   }
   
@@ -495,6 +496,56 @@ class LyricsBuilder {
     this._initialize()
 
     this._loadState()
+  }
+
+  renderVideo() {
+    this._renderVideoStatusLabel.html('Begin render ...')
+
+    const totalFrames = 1000//Math.ceil(this._totalDuration * FRAMES_PER_SECOND)
+
+    let self = this,
+      frameCount = 0,
+      currentFrame = 0
+
+    function renderTick() {
+      frameCount++;
+
+      if (frameCount == totalFrames) {
+        self._renderVideoStatusLabel.html('Rendering on server ...')
+
+        cvg.render(`lyrics_video_${Date.now()}`)
+
+        return
+      }
+
+
+      self._renderVideoStatusLabel.html(`Rendering frame (${frameCount}/${totalFrames}) ...`)
+
+      self._renderFrame(currentFrame)
+
+      cvg.addFrame(self._renderingCanvas)
+
+      currentFrame = frameCount
+
+      requestAnimationFrame(renderTick)
+    }
+
+    requestAnimationFrame(renderTick)
+  }
+
+  _renderFrame(frameIndex) {
+    const ctx = this._renderingCanvas.getContext('2d'),
+      totalFrames = this._totalDuration * FRAMES_PER_SECOND,
+      secondOffset = (frameIndex / totalFrames) * this._totalDuration,
+      frameStanza = this._currentLyricsObject.stanzaAtTime(secondOffset),
+      frameLineIndex = frameStanza.lineIndexAtTime(secondOffset),
+      frameLine = frameStanza.lines[frameLineIndex],
+      frameSyllablePercentages = frameLine.syllablePercentagesAtTime(secondOffset, frameStanza.offset)
+
+    
+    // testing
+    ctx.font = '48px serif'
+    ctx.fillText(frameSyllablePercentages.map((s) => s[0]).join(' '), 10, 50)
   }
 
   _initialize() {
@@ -563,6 +614,8 @@ class LyricsBuilder {
     const lyricsContent = document.getElementById('lyrics-content')
   
     this._currentLyricsObject = new Lyrics(lyricsContent.innerHTML)
+
+    this._initializeWaveSurfer()
   }
 
   _buildDefaultConfiguration() {
@@ -619,25 +672,6 @@ class LyricsBuilder {
 
         line.updateSyllableDurations()
       })
-    })
-
-    window.wavesurfer = WaveSurfer.create({
-      container: document.querySelector('#wavesurfer'),
-      backend: 'MediaElement',
-      fillParent: true,
-      interact: false,
-      pixelRatio: 1,
-      // hideScrollbar: true,
-      loopSelection: false
-    })
-
-    window.wavesurfer.load($('video')[0].src)
-    window.wavesurfer.zoom(PIXELS_PER_SEC)
-    window.wavesurfer.on('scroll', (event) => {
-      let scrollRatio = event.target.scrollLeft / $(event.target).width()
-
-      $('#track-elements')[0].scrollLeft = $('#track-elements').width() * scrollRatio
-      $('#stanza-lines-overlay')[0].scrollLeft = $('#stanza-lines-overlay').width() * scrollRatio
     })
 
     this.storeState()
@@ -698,16 +732,47 @@ class LyricsBuilder {
     })
   }
 
+  _initializeWaveSurfer() {
+    window.wavesurfer = WaveSurfer.create({
+      container: document.querySelector('#wavesurfer'),
+      backend: 'MediaElement',
+      fillParent: true,
+      interact: false,
+      pixelRatio: 1,
+      // hideScrollbar: true,
+      loopSelection: false
+    })
+
+    window.wavesurfer.load($('video')[0].src)
+    window.wavesurfer.zoom(PIXELS_PER_SEC)
+    window.wavesurfer.on('scroll', (event) => {
+      let scrollRatio = event.target.scrollLeft / $(event.target).width()
+
+      $('#track-elements')[0].scrollLeft = $('#track-elements').width() * scrollRatio
+      $('#stanza-lines-overlay')[0].scrollLeft = $('#stanza-lines-overlay').width() * scrollRatio
+    })
+  }
+
   _reset() {
     this._currentLyricsObject = null
     this._currentStanza = null
     this._currentLine = null
     this._currentAudioManipulator = null
     this._trackElements.remove()
+    this._renderVideoStatusLabel.html('')
 
     this._lineOverlay.empty()
     this._stanzaLinesOverlay.empty()
     this._audioContainer.innerHTML = ''
+  }
+
+  get _renderVideoStatusLabel() {
+    return $('#render-video-status-label')
+  }
+
+  /** @returns {HTMLCanvasElement} */
+  get _renderingCanvas() {
+    return $('#rendering-canvas')[0]
   }
 
   get _currentStanzaIndex() {

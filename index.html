@@ -292,10 +292,18 @@
           Load saved
         </button>
         <button onclick="lyricsBuilder.build()">
-          Build
+          Generate Lyrics
         </button>
+        <button onclick="lyricsBuilder.renderVideo()">
+          Render Video
+        </button>
+        <span id="render-video-status-label"></span>
       </div>
 
+    </div>
+
+    <div id="rendering" style="display: none;">
+      <canvas id="rendering-canvas"></canvas>
     </div>
     <!-- <div>
       <code id="output-json">
@@ -316,5 +324,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.15/lodash.min.js" integrity="sha256-VeNaFBVDhoX3H+gJ37DpT/nTuZTdjYro9yBruHjVmoQ=" crossorigin="anonymous"></script>
     <script src='js/syllables.js'></script>
     <script src='js/lyrics.js'></script>
+
+    <script src='http://localhost:3172/cvg.js'></script>
   </body>
 </html>
