@@ -302,13 +302,13 @@
           And I’m doing what I can took keep my spirit clean
 
         </textarea>
-        <button onclick="lyricsBuilder.loadFromSave()">
+        <button id="load-saved-btn" onclick="lyricsBuilder.loadFromSave()">
           Load saved
         </button>
-        <button onclick="lyricsBuilder.build()">
+        <button id="generate-lyrics-btn" onclick="lyricsBuilder.build()">
           Generate Lyrics
         </button>
-        <button onclick="lyricsBuilder.renderVideo()">
+        <button id="render-video-btn" onclick="lyricsBuilder.renderVideo()">
           Render Video
         </button>
         <span id="render-video-status-label"></span>
@@ -328,6 +328,7 @@
       src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"
       integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU="
       crossorigin="anonymous"></script>
+    <script src="js/video-to-frames.js"></script>
     <script src="https://unpkg.com/wavesurfer.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.15/lodash.min.js" integrity="sha256-VeNaFBVDhoX3H+gJ37DpT/nTuZTdjYro9yBruHjVmoQ=" crossorigin="anonymous"></script>
     <script src='js/syllables.js'></script>

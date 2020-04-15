@@ -211,6 +211,8 @@ class LyricsBuilder {
     this._currentStanza = null
     this._currentLine = null
     this._currentAudioManipulator = null
+    this._rendering = false
+    this._videoFrames = []
     this._options = {
       keepFocusOnLine: false,
       keepFocusOnStanza: false
@@ -442,59 +444,161 @@ class LyricsBuilder {
   }
 
   renderVideo() {
-    this._renderVideoStatusLabel.html('Begin render ...')
+    this.rendering = true
 
-    const aspectRatio = this._mainVideoElement[0].videoWidth / this._mainVideoElement[0].videoHeight,
-      renderedVideoWidth = VIDEO_RENDER_WIDTH,
-      renderedVideoHeight = aspectRatio * renderedVideoWidth,
-      totalFrames = Math.ceil(this._totalDuration * FRAMES_PER_SECOND)
+    this._renderVideoStatusLabel.html('Extracting frames ...')
 
-    this._renderingCanvas.width = renderedVideoWidth
-    this._renderingCanvas.height = renderedVideoHeight
+    return new Promise((resolve, reject) => {
+      VideoToFrames.getFrames(this._mainVideoElement[0].src, FRAMES_PER_SECOND, VideoToFramesMethod.totalFrames).then((frames) => {
+        return Promise.all(frames.map(frame => createImageBitmap(frame))).then((bitmaps) => {
+          this._videoFrames = bitmaps
 
-    let self = this,
-      frameCount = 0,
-      currentFrame = 0
+          resolve()
+        }).catch((err) => reject(err))
+      })
+    }).then(() => {
+      this._renderVideoStatusLabel.html('Begin render ...')
 
-    function renderTick() {
-      frameCount++;
+      const aspectRatio = this._mainVideoElement[0].videoWidth / this._mainVideoElement[0].videoHeight,
+        renderedVideoWidth = VIDEO_RENDER_WIDTH,
+        renderedVideoHeight = aspectRatio * renderedVideoWidth,
+        totalFrames = Math.ceil(this._totalDuration * FRAMES_PER_SECOND)
 
-      if (frameCount >= totalFrames) {
-        self._renderVideoStatusLabel.html('Rendering on server ...')
+      this._renderingCanvas.width = renderedVideoWidth
+      this._renderingCanvas.height = renderedVideoHeight
 
-        cvg.render(`lyrics_video_${Date.now()}`)
+      let self = this,
+        frameCount = 0,
+        currentFrame = 0
 
-        return
+      function renderTick() {
+        frameCount++;
+
+        try {
+          if (frameCount >= totalFrames) {
+            self._renderVideoStatusLabel.html('Rendering on server ...')
+
+            cvg.render(`lyrics_video_${Date.now()}`)
+
+            self.rendering = false
+
+            return
+          }
+
+
+          self._renderVideoStatusLabel.html(`Rendering frame (${frameCount}/${totalFrames}) ...`)
+
+          self._renderFrame(currentFrame)
+
+          cvg.addFrame(self._renderingCanvas)
+
+          currentFrame = frameCount
+
+          requestAnimationFrame(renderTick)
+        } catch (err) {
+          alert('Renderer error: ' + err.toString())
+
+          self.rendering = false
+        }
       }
 
-
-      self._renderVideoStatusLabel.html(`Rendering frame (${frameCount}/${totalFrames}) ...`)
-
-      self._renderFrame(currentFrame)
-
-      cvg.addFrame(self._renderingCanvas)
-
-      currentFrame = frameCount
-
       requestAnimationFrame(renderTick)
-    }
+    })
 
-    requestAnimationFrame(renderTick)
   }
 
   _renderFrame(frameIndex) {
     const ctx = this._renderingCanvas.getContext('2d'),
       totalFrames = this._totalDuration * FRAMES_PER_SECOND,
-      secondOffset = (frameIndex / totalFrames) * this._totalDuration,
+      videoPercentage = frameIndex / totalFrames,
+      videoFrameIndex = Math.floor(videoPercentage * this._videoFrames.length),
+      videoFrameBitmap = this._videoFrames[videoFrameIndex],
+      secondOffset = videoPercentage * this._totalDuration,
       frameStanza = this._currentLyricsObject.stanzaAtTime(secondOffset),
       frameLineIndex = frameStanza.lineIndexAtTime(secondOffset),
       frameLine = frameStanza.lines[frameLineIndex],
       frameSyllablePercentages = frameLine.syllablePercentagesAtTime(secondOffset, frameStanza.offset)
 
-
-    
     ctx.clearRect(0, 0, this._renderingCanvas.width, this._renderingCanvas.height)
+    ctx.drawImage(videoFrameBitmap, 0, 0, this._renderingCanvas.width, this._renderingCanvas.height)
 
+    /// @TODO seek video to offset and render video
+
+    //this._mainVideoElement.one('seeked', () => {
+      // words joined with dashes for syllables
+      //const wordsJoined = syllablesGrouped.map((group) => group.map(s => s.originalWord).join('-'))
+      
+      let textOffset = 0,
+        totalTextWidth = 0,
+        textBackgroundPadding = 10,
+        textPosition,
+        textBackgroundPosition,
+        textHeight = 48
+
+      ctx.font = 'italic small-caps bold 48px arial'
+
+      let syllablesGrouped = this._groupSyllables(frameSyllablePercentages)
+
+      // calculate total text width 
+      syllablesGrouped.forEach((group, groupIndex) => {
+        group.forEach(([syllable], index) => {
+          let part = syllable.syllable
+
+          if (index < group.length - 1) {
+            part += '-'
+          }
+
+          totalTextWidth += ctx.measureText(part).width
+        })
+
+        if (groupIndex != syllablesGrouped.length - 1) {
+          totalTextWidth += ctx.measureText(' ').width
+        }
+      })
+
+      textPosition = (this._renderingCanvas.width / 2) - (totalTextWidth / 2)
+      textBackgroundPosition = textPosition - textBackgroundPadding//(this._renderingCanvas.width / 2) - ((totalTextWidth + textBackgroundPadding * 2) / 2)
+
+      ctx.fillStyle = 'rgba(105, 105, 105, 0.65)'
+      ctx.fillRect(
+        textBackgroundPosition,
+        50 - textHeight + textBackgroundPadding,
+        totalTextWidth + (textBackgroundPadding * 2),
+        textHeight + (textBackgroundPadding * 2)
+      )
+
+      syllablesGrouped.forEach((group, groupIndex) => {
+        group.forEach(([syllable, percentage], index) => {
+          let part = syllable.syllable
+
+          if (index < group.length - 1) {
+            part += '-'
+          }
+
+          if (percentage < 1.0 && percentage > 0.0) {
+            // currently focused word
+            ctx.fillStyle = '#eee'
+          } else {
+            ctx.fillStyle = '#fff'
+          }
+
+          ctx.fillText(part, textPosition + textOffset, 50)
+
+          textOffset += ctx.measureText(part).width
+        })
+
+        if (groupIndex != syllablesGrouped.length - 1) {
+          textOffset += ctx.measureText(' ').width
+        }
+      })
+
+    //  done()
+    //})
+
+    //this.skipVideoToOffset(secondOffset)
+  }
+
+  _groupSyllables(frameSyllablePercentages) {
     let syllablesGrouped = []
 
     for (let i = 0; i < frameSyllablePercentages.length;) {
@@ -513,70 +617,7 @@ class LyricsBuilder {
       }
     }
 
-    // words joined with dashes for syllables
-    //const wordsJoined = syllablesGrouped.map((group) => group.map(s => s.originalWord).join('-'))
-    
-    let textOffset = 0,
-      totalTextWidth = 0,
-      textBackgroundPadding = 10,
-      textPosition,
-      textBackgroundPosition,
-      textHeight = 48
-
-    ctx.font = 'italic small-caps bold 48px arial'
-
-    // calculate total text width 
-    syllablesGrouped.forEach((group, groupIndex) => {
-      group.forEach(([syllable], index) => {
-        let part = syllable.syllable
-
-        if (index < group.length - 1) {
-          part += '-'
-        }
-
-        totalTextWidth += ctx.measureText(part).width
-      })
-
-      if (groupIndex != syllablesGrouped.length - 1) {
-        totalTextWidth += ctx.measureText(' ').width
-      }
-    })
-
-    textPosition = (this._renderingCanvas.width / 2) - (totalTextWidth / 2)
-    textBackgroundPosition = textPosition - textBackgroundPadding//(this._renderingCanvas.width / 2) - ((totalTextWidth + textBackgroundPadding * 2) / 2)
-
-    ctx.fillStyle = 'rgba(105, 105, 105, 0.65)'
-    ctx.fillRect(
-      textBackgroundPosition,
-      50 - textHeight + textBackgroundPadding,
-      totalTextWidth + (textBackgroundPadding * 2),
-      textHeight + (textBackgroundPadding * 2)
-    )
-
-    syllablesGrouped.forEach((group, groupIndex) => {
-      group.forEach(([syllable, percentage], index) => {
-        let part = syllable.syllable
-
-        if (index < group.length - 1) {
-          part += '-'
-        }
-
-        if (percentage < 1.0 && percentage > 0.0) {
-          // currently focused word
-          ctx.fillStyle = '#eee'
-        } else {
-          ctx.fillStyle = '#fff'
-        }
-
-        ctx.fillText(part, textPosition + textOffset, 50)
-
-        textOffset += ctx.measureText(part).width
-      })
-
-      if (groupIndex != syllablesGrouped.length - 1) {
-        textOffset += ctx.measureText(' ').width
-      }
-    })
+    return syllablesGrouped
   }
 
   _initialize() {
@@ -789,12 +830,40 @@ class LyricsBuilder {
     this._currentStanza = null
     this._currentLine = null
     this._currentAudioManipulator = null
+    this.rendering = false
+    this._videoFrames = []
     this._trackElements.remove()
     this._renderVideoStatusLabel.html('')
 
     this._lineOverlay.empty()
     this._stanzaLinesOverlay.empty()
     this._audioContainer.innerHTML = ''
+  }
+
+  get rendering() {
+    return this._rendering
+  }
+
+  set rendering(value) {
+    if (value) {
+      this._loadSavedButton.attr('disabled', 'disabled')
+      this._generateLyricsButton.attr('disabled', 'disabled')
+    } else {
+      this._loadSavedButton.removeAttr('disabled')
+      this._generateLyricsButton.removeAttr('disabled')
+
+      this._renderVideoStatusLabel.html('')
+    }
+
+    this._rendering = value
+  }
+
+  get _loadSavedButton() {
+    return $('#load-saved-btn')
+  }
+
+  get _generateLyricsButton() {
+    return $('#generate-lyrics-btn')
   }
 
   get _renderVideoStatusLabel() {
@@ -866,7 +935,9 @@ $(function () {
   const video = document.getElementById('main-video')
 
   video.addEventListener('timeupdate', () => {
-    lyricsBuilder.update(video.currentTime)
+    if (!window.lyricsBuilder.rendering) {
+      lyricsBuilder.update(video.currentTime)
+    }
     // video.setAttribute('controls', 'controls')
   })
 
