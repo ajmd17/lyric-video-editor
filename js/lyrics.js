@@ -1,5 +1,6 @@
 const PIXELS_PER_SEC = 10,
-  FRAMES_PER_SECOND = 30
+  FRAMES_PER_SECOND = 30,
+  VIDEO_RENDER_WIDTH = 1080
 
 class Lyrics {
   constructor(lyrics) {
@@ -157,7 +158,11 @@ class Line {
   }
 
   _buildSyllables() {
-    return _.map(_.flatten(syllables(this.originalLine)), (syllable) => new Syllable(syllable))
+    return _.flatten(_.map(syllables(this.originalLine), (syllables) => {
+      const wholeWord = syllables.join('')
+
+      return syllables.map(syllable => new Syllable(syllable, wholeWord))
+    }))
   }
 
   toJSON() {
@@ -171,14 +176,16 @@ class Line {
 }
 
 class Syllable {
-  constructor(syllable, duration = 0, offset = 0) {
+  constructor(syllable, originalWord, duration = 0, offset = 0) {
     this.syllable = syllable
+    this.originalWord = originalWord
     this.duration = duration
     this.offset = offset
   }
 
   toJSON() {
     return {
+      originalWord: this.originalWord,
       offset: parseFloat(this.offset.toFixed(2)),
       duration: parseFloat(this.duration.toFixed(2)),
       syllable: this.syllable
@@ -195,70 +202,6 @@ class AudioManipulator {
     this._audioContext = audioContext
     this._sourceNode = sourceNode
     this._processor = null
-  }
-
-  isolateVocals() {
-    let filterLowPass = this._audioContext.createBiquadFilter(),
-        filterHighPass = this._audioContext.createBiquadFilter(),
-        mix = this._audioContext.createGain(),
-        mix2 = this._audioContext.createGain()
-
-    this._sourceNode.connect(filterLowPass)
-
-    filterLowPass.type = 'lowpass'
-    filterLowPass.frequency.value = 120
-
-    this._sourceNode.connect(filterHighPass)
-
-    filterHighPass.type = 'highpass'
-    filterHighPass.frequency.value = 120
-
-    this._sourceNode.connect(mix2)
-
-    mix2.connect(this._audioContext.destination)
-
-    mix.gain.value = 1
-    mix2.gain.value = 0
-
-    this._processor = this._audioContext.createScriptProcessor(2048, 2, 1)
-
-    filterHighPass.connect(this._processor)
-    filterLowPass.connect(mix)
-    this._processor.connect(mix)
-    mix.connect(this._audioContext.destination)
-
-    let lastTime = null
-
-    this._processor.onaudioprocess = function channelPhaseFlip(event) {
-      const leftChannel = event.inputBuffer.getChannelData(0),
-            rightChannel = event.inputBuffer.getChannelData(1),
-            outputChannel = event.outputBuffer.getChannelData(0)
-
-
-      for (let i = 0; i < leftChannel.length; i++) {
-        let removed = leftChannel[i] - rightChannel[i]
-        
-        let mono = (leftChannel[i] + rightChannel[i]) / 2
-        const now = Date.now()
-
-        let ampMono = Math.abs(mono),
-          ampRemoved = Math.abs(removed)
-
-        if (ampMono - ampRemoved >= 0.8) {
-          //console.log(ampMono - ampRemoved)
-
-          if (lastTime == null || (now - lastTime >= 400/*ms*/)) {
-            console.log('newsection', now - lastTime)
-          }
-
-          lastTime = now
-        }
-
-        outputChannel[i] = mono
-        
-        // outputChannel[i] = mono - removed
-      }
-    }
   }
 }
 
@@ -501,7 +444,13 @@ class LyricsBuilder {
   renderVideo() {
     this._renderVideoStatusLabel.html('Begin render ...')
 
-    const totalFrames = 1000//Math.ceil(this._totalDuration * FRAMES_PER_SECOND)
+    const aspectRatio = this._mainVideoElement[0].videoWidth / this._mainVideoElement[0].videoHeight,
+      renderedVideoWidth = VIDEO_RENDER_WIDTH,
+      renderedVideoHeight = aspectRatio * renderedVideoWidth,
+      totalFrames = Math.ceil(this._totalDuration * FRAMES_PER_SECOND)
+
+    this._renderingCanvas.width = renderedVideoWidth
+    this._renderingCanvas.height = renderedVideoHeight
 
     let self = this,
       frameCount = 0,
@@ -510,7 +459,7 @@ class LyricsBuilder {
     function renderTick() {
       frameCount++;
 
-      if (frameCount == totalFrames) {
+      if (frameCount >= totalFrames) {
         self._renderVideoStatusLabel.html('Rendering on server ...')
 
         cvg.render(`lyrics_video_${Date.now()}`)
@@ -542,10 +491,92 @@ class LyricsBuilder {
       frameLine = frameStanza.lines[frameLineIndex],
       frameSyllablePercentages = frameLine.syllablePercentagesAtTime(secondOffset, frameStanza.offset)
 
+
     
-    // testing
-    ctx.font = '48px serif'
-    ctx.fillText(frameSyllablePercentages.map((s) => s[0]).join(' '), 10, 50)
+    ctx.clearRect(0, 0, this._renderingCanvas.width, this._renderingCanvas.height)
+
+    let syllablesGrouped = []
+
+    for (let i = 0; i < frameSyllablePercentages.length;) {
+      let originalObject = frameSyllablePercentages[i]
+
+      syllablesGrouped.push([originalObject])
+
+      i++
+
+      let j = i
+
+      while (j < frameSyllablePercentages.length && frameSyllablePercentages[j][0].originalWord == originalObject[0].originalWord) {
+        syllablesGrouped[syllablesGrouped.length - 1].push(frameSyllablePercentages[j])
+
+        j++, i++
+      }
+    }
+
+    // words joined with dashes for syllables
+    //const wordsJoined = syllablesGrouped.map((group) => group.map(s => s.originalWord).join('-'))
+    
+    let textOffset = 0,
+      totalTextWidth = 0,
+      textBackgroundPadding = 10,
+      textPosition,
+      textBackgroundPosition,
+      textHeight = 48
+
+    ctx.font = 'italic small-caps bold 48px arial'
+
+    // calculate total text width 
+    syllablesGrouped.forEach((group, groupIndex) => {
+      group.forEach(([syllable], index) => {
+        let part = syllable.syllable
+
+        if (index < group.length - 1) {
+          part += '-'
+        }
+
+        totalTextWidth += ctx.measureText(part).width
+      })
+
+      if (groupIndex != syllablesGrouped.length - 1) {
+        totalTextWidth += ctx.measureText(' ').width
+      }
+    })
+
+    textPosition = (this._renderingCanvas.width / 2) - (totalTextWidth / 2)
+    textBackgroundPosition = textPosition - textBackgroundPadding//(this._renderingCanvas.width / 2) - ((totalTextWidth + textBackgroundPadding * 2) / 2)
+
+    ctx.fillStyle = 'rgba(105, 105, 105, 0.65)'
+    ctx.fillRect(
+      textBackgroundPosition,
+      50 - textHeight + textBackgroundPadding,
+      totalTextWidth + (textBackgroundPadding * 2),
+      textHeight + (textBackgroundPadding * 2)
+    )
+
+    syllablesGrouped.forEach((group, groupIndex) => {
+      group.forEach(([syllable, percentage], index) => {
+        let part = syllable.syllable
+
+        if (index < group.length - 1) {
+          part += '-'
+        }
+
+        if (percentage < 1.0 && percentage > 0.0) {
+          // currently focused word
+          ctx.fillStyle = '#eee'
+        } else {
+          ctx.fillStyle = '#fff'
+        }
+
+        ctx.fillText(part, textPosition + textOffset, 50)
+
+        textOffset += ctx.measureText(part).width
+      })
+
+      if (groupIndex != syllablesGrouped.length - 1) {
+        textOffset += ctx.measureText(' ').width
+      }
+    })
   }
 
   _initialize() {
@@ -714,7 +745,7 @@ class LyricsBuilder {
 
           if (!_.isEmpty(lineJson.syllables)) {
             lineJson.syllables.forEach((syllableJson) => {
-              line.syllables.push(new Syllable(syllableJson.syllable, syllableJson.duration, syllableJson.offset))
+              line.syllables.push(new Syllable(syllableJson.syllable, syllableJson.originalWord, syllableJson.duration, syllableJson.offset))
             })
           }
 
