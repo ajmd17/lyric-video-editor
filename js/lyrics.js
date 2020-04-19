@@ -1,197 +1,8 @@
 const PIXELS_PER_SEC = 10,
   FRAMES_PER_SECOND = 30,
+  VIDEO_RENDER_HEIGHT = 720,
   VIDEO_RENDER_WIDTH = 1080
 
-class Lyrics {
-  constructor(lyrics) {
-    this.originalLyrics = lyrics
-
-    /** @type {Stanza[]} */
-    this.stanzas = this._buildStanzas()
-  }
-
-  stanzaAtTime(timeSeconds) {
-    // update current overlay on screen
-    const stanzasSorted = _.sortBy(
-      _.filter(
-        this.stanzas,
-        (stanza) => timeSeconds >= stanza.offset 
-      ),
-      'offset'
-    )
-
-    return _.last(stanzasSorted)
-  }
-
-  updateStanzaDurations(videoDuration) {
-    _.sortBy(_.map(this.stanzas, (stanza, index) => ({ stanza, index })), 'stanza.offset').forEach(({ stanza, index }) => {
-      let stanzaDuration
-
-      if (index == this.stanzas.length - 1) {
-        stanzaDuration = videoDuration - stanza.offset
-      } else {
-        stanzaDuration = this.stanzas[index + 1].offset - stanza.offset
-      }
-
-      stanza.duration = stanzaDuration
-
-      stanza.updateLineDurations()
-    })
-  }
-
-  _buildStanzas() {
-    return _.filter(this.originalLyrics.split(/(?:\r?\n|\u00a0|\u000a)\s*(?:\r?\n|\u00a0|\u000a)/g), (str) => !_.isEmpty(str))
-      .map((stanza) => new Stanza(stanza))
-  }
-
-  toJSON() {
-    return {
-      stanzas: this.stanzas.map((stanza) => stanza.toJSON())
-    }
-  }
-}
-
-class Stanza {
-  constructor(stanza, duration = 0, offset = 0) {
-    this.originalStanza = stanza
-    this.duration = duration
-    this.offset = offset
-    this.$element = null
-
-    if (_.isEmpty(stanza)) {
-      this.lines = []
-    } else {
-      /** @type {Line} */
-      this.lines = this._buildLines()
-    }
-  }
-
-  lineIndexAtTime(timeSeconds) {
-    const linesSortedIndices = _.sortBy(
-      _.filter(
-        this.lines.map((line, index) => ({ time: this.getAbsoluteTimeOfLine(line), index })),
-        ({ time }) => timeSeconds >= time 
-      ),
-      'time'
-    )
-
-    return _.isEmpty(linesSortedIndices) ? -1 : _.last(linesSortedIndices).index
-  }
-
-  updateLineDurations() {
-    // setup line durations
-    this.lines.forEach((line, lineIndex) => {
-      if (lineIndex == this.lines.length - 1) {
-        line.duration = this.duration - line.offset
-      } else {
-        line.duration = this.lines[lineIndex + 1].offset - line.offset
-      }
-
-      line.updateSyllableDurations()
-    })
-  }
-
-  /** @param {Line} line */
-  getAbsoluteTimeOfLine(line) {
-    return this.offset + line.offset
-  }
-
-  _buildLines() {
-    return this.originalStanza.split(/(?:\r?\n|\u00a0|\u000a)/g).map((line) => new Line(line))
-  }
-
-  toJSON() {
-    return {
-      offset: parseFloat(this.offset.toFixed(2)),
-      duration: parseFloat(this.duration.toFixed(2)),
-      lines: this.lines.map((line) => line.toJSON())
-    }
-  }
-}
-
-class Line {
-  constructor(line, duration = 0, offset = 0) {
-    this.originalLine = line
-    this.duration = duration
-    this.offset = offset
-    this.$element = null
-
-    /** @type {string[]} */
-    this.syllables = this._buildSyllables()
-  }
-
-  syllablePercentagesAtTime(timeSeconds, stanzaOffset) {
-    const syllablesSortedIndices = _.sortBy(
-      _.filter(
-        this.syllables.map((syllable, index) => ({ time: this.getAbsoluteTimeOfSyllable(syllable), index })),
-        ({ time }) => timeSeconds >= time 
-      ),
-      'time'
-    )
-
-    const syllablesSorted = _.map(syllablesSortedIndices, ({ index }) => this.syllables[index])
-
-    // [[syllable, percentage], ...]
-
-    // update syllable progress
-    return syllablesSorted.map((syllable) => {
-      const relativeTime = Math.min(timeSeconds - (stanzaOffset + this.offset + syllable.offset), syllable.duration),
-        progressValue = (relativeTime / syllable.duration)
-
-      return [syllable, progressValue]
-    })
-  }
-
-  updateSyllableDurations() {
-    this.syllables.forEach((syllable, syllableIndex) => {
-      if (syllableIndex == this.syllables.length - 1) {
-        syllable.duration = this.duration - syllable.offset
-      } else {
-        syllable.duration = this.syllables[syllableIndex + 1].offset - syllable.offset
-      }
-    })
-  }
-
-  /** @param {Syllable} syllable */
-  getAbsoluteTimeOfSyllable(syllable) {
-    return this.offset + syllable.offset
-  }
-
-  _buildSyllables() {
-    return _.flatten(_.map(syllables(this.originalLine), (syllables) => {
-      const wholeWord = syllables.join('')
-
-      return syllables.map(syllable => new Syllable(syllable, wholeWord))
-    }))
-  }
-
-  toJSON() {
-    return {
-      offset: parseFloat(this.offset.toFixed(2)),
-      duration: parseFloat(this.duration.toFixed(2)),
-      originalLine: this.originalLine,
-      syllables: this.syllables
-    }
-  }
-}
-
-class Syllable {
-  constructor(syllable, originalWord, duration = 0, offset = 0) {
-    this.syllable = syllable
-    this.originalWord = originalWord
-    this.duration = duration
-    this.offset = offset
-  }
-
-  toJSON() {
-    return {
-      originalWord: this.originalWord,
-      offset: parseFloat(this.offset.toFixed(2)),
-      duration: parseFloat(this.duration.toFixed(2)),
-      syllable: this.syllable
-    }
-  }
-}
 
 class AudioManipulator {
   /**
@@ -219,30 +30,30 @@ class LyricsBuilder {
     }
   }
 
-  createAudioSourceFromVideo() {
-    const videoElement = document.getElementById('main-video'),
-      audioElement = document.createElement('audio'),
-      audioContext = new AudioContext()
+  // createAudioSourceFromVideo() {
+  //   const videoElement = document.getElementById('main-video'),
+  //     audioElement = document.createElement('audio'),
+  //     audioContext = new AudioContext()
   
-    audioElement.setAttribute('src', videoElement.getAttribute('src'))
-    audioElement.setAttribute('controls', 'true')
+  //   audioElement.setAttribute('src', videoElement.getAttribute('src'))
+  //   audioElement.setAttribute('controls', 'true')
   
-    this._audioContainer.innerHTML = ''
-    this._audioContainer.appendChild(audioElement)
+  //   this._audioContainer.innerHTML = ''
+  //   this._audioContainer.appendChild(audioElement)
     
-    let sourceNode = audioContext.createMediaElementSource(audioElement)
+  //   let sourceNode = audioContext.createMediaElementSource(audioElement)
 
-    this._currentAudioManipulator = new AudioManipulator(audioContext, sourceNode)
+  //   this._currentAudioManipulator = new AudioManipulator(audioContext, sourceNode)
 
-    return sourceNode
-  }
+  //   return sourceNode
+  // }
 
   skipVideoToTime(timeSeconds) {
-    document.getElementById('main-video').currentTime = Math.floor(timeSeconds)
+    this._audioElement[0].currentTime = Math.floor(timeSeconds)
   }
 
   skipVideoToOffset(offset) {
-    this._mainVideoElement[0].pause()
+    this._audioElement[0].pause()
 
     this._lineOverlay.empty()
     this._stanzaLinesOverlay.empty()
@@ -252,7 +63,7 @@ class LyricsBuilder {
 
     this.skipVideoToTime(offset)
 
-    this._mainVideoElement[0].play()
+    this._audioElement[0].play()
   }
 
   _createStanzaElement(stanza, index) {
@@ -270,13 +81,7 @@ class LyricsBuilder {
       </div>
     `)
 
-    // $element.offset({
-    //   top: this._mainVideoElement.position().top + this._mainVideoElement.height(),
-    //   left: this._mainVideoElement.position().left + (this._mainVideoElement.width() * percentage)
-    // })
-
     $element.css({
-      //'margin-left': this._mainVideoElement.position().top + this._mainVideoElement.height(),
       left: PIXELS_PER_SEC * stanza.offset
     })
 
@@ -321,13 +126,6 @@ class LyricsBuilder {
         <div class="arrow"></div>
       </div>
     `)
-
-    // const percentage = line.offset / stanza.duration
-
-    // $lineElement.offset({
-    //   top: this._mainVideoElement.position().top + this._mainVideoElement.height() - 150,
-    //   left: this._mainVideoElement.position().left + (this._mainVideoElement.width() * percentage)
-    // })
 
     $lineElement.offset({
       left: PIXELS_PER_SEC * (stanza.offset + line.offset)
@@ -379,8 +177,8 @@ class LyricsBuilder {
     const newLine = this._currentStanza.lines[currentLineIndex]
 
     if (newLine != this._currentLine || options.force) {
-      this._lineOverlay.width(this._mainVideoElement.width())
-      this._lineOverlay.height(this._mainVideoElement.height())
+      this._lineOverlay.width(this._videoPreviewContent.width())
+      this._lineOverlay.height(this._videoPreviewContent.height())
 
       const $line = $('<div class="line"></div>')
 
@@ -403,7 +201,7 @@ class LyricsBuilder {
           })
 
           $syllable.on('drag', (event) => {
-            const percentage = $syllable.position().left / this._mainVideoElement.width(),
+            const percentage = $syllable.position().left / this._videoPreviewContent.width(),
               offset = newLine.duration * percentage
 
             syllable.offset = offset
@@ -443,12 +241,34 @@ class LyricsBuilder {
     this._loadState()
   }
 
+  _calculateBackgroundImagePlacement(canvasWidth, canvasHeight) {
+    const imageWidth = this._videoBackgroundImage.width(),
+          imageHeight = this._videoBackgroundImage.height()
+
+    // amount we have to scale by : we want image height to be same as canvas height
+    const scaleRatio = imageHeight / canvasHeight,
+      imageWidthScaled = imageWidth * scaleRatio,
+      imageHeightScaled = imageHeight * scaleRatio
+
+    return {
+      x: (canvasWidth / 2) - (imageWidthScaled / 2),
+      y: 0,
+      widthScaled: imageWidthScaled,
+      heightScaled: imageHeightScaled
+    }
+  }
+
   renderVideo() {
     this.rendering = true
 
-    this._renderVideoStatusLabel.html('Extracting frames ...')
+    // hardcoded for now
+    const videoEffects = [
+      new TVStaticEffect()
+    ]
 
-    return new Promise((resolve, reject) => {
+    //this._renderVideoStatusLabel.html('Extracting frames ...')
+
+    /*return new Promise((resolve, reject) => {
       VideoToFrames.getFrames(this._mainVideoElement[0].src, FRAMES_PER_SECOND, VideoToFramesMethod.totalFrames).then((frames) => {
         return Promise.all(frames.map(frame => createImageBitmap(frame))).then((bitmaps) => {
           this._videoFrames = bitmaps
@@ -456,23 +276,68 @@ class LyricsBuilder {
           resolve()
         }).catch((err) => reject(err))
       })
-    }).then(() => {
+    }).then(() => {*/
       this._renderVideoStatusLabel.html('Begin render ...')
 
-      const aspectRatio = this._mainVideoElement[0].videoWidth / this._mainVideoElement[0].videoHeight,
+      const renderedVideoHeight = VIDEO_RENDER_HEIGHT,
         renderedVideoWidth = VIDEO_RENDER_WIDTH,
-        renderedVideoHeight = aspectRatio * renderedVideoWidth,
-        totalFrames = Math.ceil(this._totalDuration * FRAMES_PER_SECOND)
+        totalFrames = Math.ceil(this._totalDuration * FRAMES_PER_SECOND),
+        ctx = this._renderingCanvas.getContext('2d')
 
       this._renderingCanvas.width = renderedVideoWidth
       this._renderingCanvas.height = renderedVideoHeight
 
+      // render background image on canvas.
+      // we will redraw the section of the screen where the lyrics go,
+      // as to not redraw the entire image each time.
+      const backgroundImagePlacement = this._calculateBackgroundImagePlacement(renderedVideoWidth, renderedVideoHeight)
+
+      // ctx.drawImage(
+      //   this._videoBackgroundImage[0],
+      //   0, 0,
+      //   this._videoBackgroundImage[0].naturalWidth, this._videoBackgroundImage[0].naturalHeight,
+      //   backgroundImagePlacement.x, backgroundImagePlacement.y,
+      //   backgroundImagePlacement.widthScaled, backgroundImagePlacement.heightScaled
+      // )
+
+      // ctx.drawImage(
+      //   this._videoBackgroundImage[0],
+      //   (renderedVideoWidth / 2) - (this._videoBackgroundImage[0].width / 2), backgroundImagePlacement.y,
+      //   this._videoBackgroundImage[0].width, this._videoBackgroundImage[0].height
+      // )
+      ctx.drawImage(
+        this._videoBackgroundImage[0],
+        backgroundImagePlacement.x, backgroundImagePlacement.y,
+        backgroundImagePlacement.widthScaled, backgroundImagePlacement.heightScaled
+      )
+
       let self = this,
-        frameCount = 0,
-        currentFrame = 0
+        currentFrame = 6500,
+        frameCount = currentFrame + 1,
+        stateData = {
+          timeSeconds: 0,
+          lyrics: this._currentLyricsObject,
+          currentStanza: null,
+          currentLineIndex: 0,
+          currentLine: null,
+          syllablePercentages: []
+        }
+
+      const updateStateData = () => {
+        const videoPercentage = currentFrame / totalFrames
+
+        stateData.lyrics = self._currentLyricsObject
+        stateData.timeSeconds = videoPercentage * self._totalDuration
+        stateData.currentStanza = self._currentLyricsObject.stanzaAtTime(stateData.timeSeconds)
+        stateData.currentLineIndex = stateData.currentStanza.lineIndexAtTime(stateData.timeSeconds)
+        stateData.currentLine = stateData.currentStanza.lines[stateData.currentLineIndex]
+        stateData.syllablePercentages = stateData.currentLine.syllablePercentagesAtTime(stateData.timeSeconds, stateData.currentStanza.offset)
+      }
 
       function renderTick() {
         frameCount++;
+
+        updateStateData()
 
         try {
           if (frameCount >= totalFrames) {
@@ -488,7 +353,16 @@ class LyricsBuilder {
 
           self._renderVideoStatusLabel.html(`Rendering frame (${frameCount}/${totalFrames}) ...`)
 
-          self._renderFrame(currentFrame)
+          self._renderFrame(currentFrame, backgroundImagePlacement, stateData)
+
+          videoEffects.forEach((videoEffect) => {
+            const result = videoEffect.render(self._renderingCanvas, ctx, stateData),
+              combinedData = ctx.getImageData(0, 0, self._renderingCanvas.width, self._renderingCanvas.height)
+
+            result.combine(combinedData)
+
+            ctx.putImageData(combinedData, 0, 0)
+          })
 
           cvg.addFrame(self._renderingCanvas)
 
@@ -496,6 +370,7 @@ class LyricsBuilder {
 
           requestAnimationFrame(renderTick)
         } catch (err) {
+          console.error(err)
           alert('Renderer error: ' + err.toString())
 
           self.rendering = false
@@ -503,99 +378,110 @@ class LyricsBuilder {
       }
 
       requestAnimationFrame(renderTick)
-    })
+    //})
 
   }
 
-  _renderFrame(frameIndex) {
-    const ctx = this._renderingCanvas.getContext('2d'),
-      totalFrames = this._totalDuration * FRAMES_PER_SECOND,
-      videoPercentage = frameIndex / totalFrames,
-      videoFrameIndex = Math.floor(videoPercentage * this._videoFrames.length),
-      videoFrameBitmap = this._videoFrames[videoFrameIndex],
-      secondOffset = videoPercentage * this._totalDuration,
-      frameStanza = this._currentLyricsObject.stanzaAtTime(secondOffset),
-      frameLineIndex = frameStanza.lineIndexAtTime(secondOffset),
-      frameLine = frameStanza.lines[frameLineIndex],
-      frameSyllablePercentages = frameLine.syllablePercentagesAtTime(secondOffset, frameStanza.offset)
+  _renderFrame(frameIndex, backgroundImagePlacement = null, stateData = {}) {
+    const ctx = this._renderingCanvas.getContext('2d')
 
-    ctx.clearRect(0, 0, this._renderingCanvas.width, this._renderingCanvas.height)
-    ctx.drawImage(videoFrameBitmap, 0, 0, this._renderingCanvas.width, this._renderingCanvas.height)
+
+    const lyricSection = {
+      x: 0,
+      y: 0,
+      width: this._renderingCanvas.width,
+      height: 100
+    }
+    ctx.clearRect(
+      0, 0,
+      this._renderingCanvas.width, this._renderingCanvas.height
+    )
+    //ctx.drawImage(videoFrameBitmap, 0, 0, this._renderingCanvas.width, this._renderingCanvas.height)
+
+    // if (backgroundImagePlacement !== null) {
+    //   // render only a subsection so we dont have to redraw entire thing
+    //   ctx.drawImage(
+    //     this._videoBackgroundImage[0],
+    //     0, 0,
+    //     this._videoBackgroundImage[0].naturalWidth, lyricSection.height,
+    //     backgroundImagePlacement.x, backgroundImagePlacement.y,
+    //     backgroundImagePlacement.widthScaled, lyricSection.height//backgroundImagePlacement.heightScaled
+    //   )
+    // }
+
+    if (backgroundImagePlacement != null) {
+      ctx.drawImage(
+        this._videoBackgroundImage[0],
+        backgroundImagePlacement.x, backgroundImagePlacement.y,
+        backgroundImagePlacement.widthScaled, backgroundImagePlacement.heightScaled
+      )
+    }
 
     /// @TODO seek video to offset and render video
 
-    //this._mainVideoElement.one('seeked', () => {
-      // words joined with dashes for syllables
-      //const wordsJoined = syllablesGrouped.map((group) => group.map(s => s.originalWord).join('-'))
-      
-      let textOffset = 0,
-        totalTextWidth = 0,
-        textBackgroundPadding = 10,
-        textPosition,
-        textBackgroundPosition,
-        textHeight = 48
+    let textOffset = 0,
+      totalTextWidth = 0,
+      textBackgroundPadding = 10,
+      textPosition,
+      textBackgroundPosition,
+      textHeight = 48
 
-      ctx.font = 'italic small-caps bold 48px arial'
+    ctx.font = 'italic small-caps bold 48px arial'
 
-      let syllablesGrouped = this._groupSyllables(frameSyllablePercentages)
+    let syllablesGrouped = this._groupSyllables(stateData.syllablePercentages)
 
-      // calculate total text width 
-      syllablesGrouped.forEach((group, groupIndex) => {
-        group.forEach(([syllable], index) => {
-          let part = syllable.syllable
+    // calculate total text width 
+    syllablesGrouped.forEach((group, groupIndex) => {
+      group.forEach(([syllable], index) => {
+        let part = syllable.syllable
 
-          if (index < group.length - 1) {
-            part += '-'
-          }
-
-          totalTextWidth += ctx.measureText(part).width
-        })
-
-        if (groupIndex != syllablesGrouped.length - 1) {
-          totalTextWidth += ctx.measureText(' ').width
+        if (index < group.length - 1) {
+          part += '-'
         }
+
+        totalTextWidth += ctx.measureText(part).width
       })
 
-      textPosition = (this._renderingCanvas.width / 2) - (totalTextWidth / 2)
-      textBackgroundPosition = textPosition - textBackgroundPadding//(this._renderingCanvas.width / 2) - ((totalTextWidth + textBackgroundPadding * 2) / 2)
+      if (groupIndex != syllablesGrouped.length - 1) {
+        totalTextWidth += ctx.measureText(' ').width
+      }
+    })
 
-      ctx.fillStyle = 'rgba(105, 105, 105, 0.65)'
-      ctx.fillRect(
-        textBackgroundPosition,
-        50 - textHeight + textBackgroundPadding,
-        totalTextWidth + (textBackgroundPadding * 2),
-        textHeight + (textBackgroundPadding * 2)
-      )
+    textPosition = (this._renderingCanvas.width / 2) - (totalTextWidth / 2)
+    textBackgroundPosition = textPosition - textBackgroundPadding//(this._renderingCanvas.width / 2) - ((totalTextWidth + textBackgroundPadding * 2) / 2)
 
-      syllablesGrouped.forEach((group, groupIndex) => {
-        group.forEach(([syllable, percentage], index) => {
-          let part = syllable.syllable
+    ctx.fillStyle = 'rgba(105, 105, 105, 0.65)'
+    ctx.fillRect(
+      textBackgroundPosition,
+      lyricSection.y,// - textHeight + textBackgroundPadding,
+      totalTextWidth + (textBackgroundPadding * 2),
+      textHeight + (textBackgroundPadding * 2)
+    )
 
-          if (index < group.length - 1) {
-            part += '-'
-          }
+    syllablesGrouped.forEach((group, groupIndex) => {
+      group.forEach(([syllable, percentage], index) => {
+        let part = syllable.syllable
 
-          if (percentage < 1.0 && percentage > 0.0) {
-            // currently focused word
-            ctx.fillStyle = '#eee'
-          } else {
-            ctx.fillStyle = '#fff'
-          }
-
-          ctx.fillText(part, textPosition + textOffset, 50)
-
-          textOffset += ctx.measureText(part).width
-        })
-
-        if (groupIndex != syllablesGrouped.length - 1) {
-          textOffset += ctx.measureText(' ').width
+        if (index < group.length - 1) {
+          part += '-'
         }
+
+        if (percentage < 1.0 && percentage > 0.0) {
+          // currently focused word
+          ctx.fillStyle = '#eee'
+        } else {
+          ctx.fillStyle = '#fff'
+        }
+
+        ctx.fillText(part, textPosition + textOffset, 50)
+
+        textOffset += ctx.measureText(part).width
       })
 
-    //  done()
-    //})
-
-    //this.skipVideoToOffset(secondOffset)
+      if (groupIndex != syllablesGrouped.length - 1) {
+        textOffset += ctx.measureText(' ').width
+      }
+    })
   }
 
   _groupSyllables(frameSyllablePercentages) {
@@ -623,8 +509,8 @@ class LyricsBuilder {
   _initialize() {
     this._reset()
 
-    this._controlsOverlay.width(this._mainVideoElement.width())
-    this._controlsOverlay.height(this._mainVideoElement.height())
+    this._controlsOverlay.width(this._videoPreviewContent.width())
+    this._controlsOverlay.height(this._videoPreviewContent.height())
 
     $('#prev-stanza').click(() => {
       const newStanza = this._currentLyricsObject.stanzas[Math.max(this._currentStanzaIndex - 1, 0)]
@@ -691,9 +577,7 @@ class LyricsBuilder {
   }
 
   _buildDefaultConfiguration() {
-    const mainVideoElement = document.getElementById('main-video'),
-      $mainVideoElement = $(mainVideoElement),
-      trackElements = document.getElementById('track-elements')
+    const trackElements = document.getElementById('track-elements')
 
     this._currentLyricsObject.stanzas.forEach((stanza, index) => {
       const percentage = index / this._currentLyricsObject.stanzas.length
@@ -815,7 +699,7 @@ class LyricsBuilder {
       loopSelection: false
     })
 
-    window.wavesurfer.load($('video')[0].src)
+    window.wavesurfer.load(this._audioElement[0].src)
     window.wavesurfer.zoom(PIXELS_PER_SEC)
     window.wavesurfer.on('scroll', (event) => {
       let scrollRatio = event.target.scrollLeft / $(event.target).width()
@@ -858,6 +742,18 @@ class LyricsBuilder {
     this._rendering = value
   }
 
+  get _videoBackgroundImage() {
+    return $('#video-background-image')
+  }
+
+  get _videoPreviewContent() {
+    return $('#video-preview-content')
+  }
+
+  get _audioElement() {
+    return $('#audio-element')
+  }
+
   get _loadSavedButton() {
     return $('#load-saved-btn')
   }
@@ -880,11 +776,11 @@ class LyricsBuilder {
   }
 
   get _currentTime() {
-    return this._mainVideoElement[0].currentTime
+    return this._audioElement[0].currentTime
   }
 
   get _totalDuration() {
-    return this._mainVideoElement[0].duration
+    return this._audioElement[0].duration
   }
 
   get _mainVideoElement() {
@@ -932,11 +828,9 @@ function getTimeHHMMSS(timeSeconds) {
   return minutes + ':' + seconds
 }
 $(function () {
-  const video = document.getElementById('main-video')
-
-  video.addEventListener('timeupdate', () => {
-    if (!window.lyricsBuilder.rendering) {
-      lyricsBuilder.update(video.currentTime)
+  lyricsBuilder._audioElement.on('timeupdate', () => {
+    if (!lyricsBuilder.rendering) {
+      lyricsBuilder.update(lyricsBuilder._currentTime)
     }
     // video.setAttribute('controls', 'controls')
   })

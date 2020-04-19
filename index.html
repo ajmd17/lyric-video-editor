@@ -23,6 +23,34 @@
         font-family: sans-serif;
       }
 
+      #video-preview {
+        width: 1080px;
+      }
+      #video-preview audio {
+        width: 100%;
+      }
+      #video-background-image-container {
+        position: relative;
+
+        width: 1080px;
+        height: 720px;
+        background: #000;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+      }
+      #video-background-image-container > img {
+        height: 720px;
+        width: auto;
+      }
+
+      #video-preview-content {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+      }
+
       .container {
         display: flex;
         flex-direction: row;
@@ -94,6 +122,8 @@
       }
 
       #controls-overlay {
+        display: none;
+
         position: absolute;
         z-index: 20;
         pointer-events: none;
@@ -198,6 +228,10 @@
       #stanza-lines-overlay .line progress {
         width: 100%;
       }
+
+      #rendering {
+        z-index: 10;
+      }
       /* #stanza-lines-overlay .line .content {
         padding: 2px 3px;
       } */
@@ -211,8 +245,16 @@
   <body>
     <div class="container">
       <div id="video-container">
+        <div id="video-preview">
+          <div id="video-background-image-container">
+            <img id="video-background-image" src="data/test_img.png"></img>
+            <div id="video-preview-content">
+              <div id="line-overlay"></div>
+            </div>
+          </div>
+          <audio id="audio-element" src="data/test_audio.mp3" controls></audio>
+        </div>
         <div id="audio-container"></div>
-        <div id="line-overlay"></div>
         <div id="controls-overlay">
           <div class="row">
             <div>
@@ -233,7 +275,7 @@
             </div>
           </div>
         </div>
-        <video id="main-video" src='data/seeing red.mp4' controls controlslist="nofullscreen nodownload"></video>
+        <!-- <video id="main-video" src='data/seeing red.mp4' controls controlslist="nofullscreen nodownload"></video> -->
         
         
         <div id="wavesurfer">
@@ -316,8 +358,8 @@
 
     </div>
 
-    <div id="rendering" style="display: none;">
-      <canvas id="rendering-canvas"></canvas>
+    <div id="rendering">
+      <canvas id="rendering-canvas" width="1080" height="720"></canvas>
     </div>
 
     <script
@@ -332,6 +374,8 @@
     <script src="https://unpkg.com/wavesurfer.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.15/lodash.min.js" integrity="sha256-VeNaFBVDhoX3H+gJ37DpT/nTuZTdjYro9yBruHjVmoQ=" crossorigin="anonymous"></script>
     <script src='js/syllables.js'></script>
+    <script src='js/lyrics/effects.js'></script>
+    <script src='js/lyrics/structures.js'></script>
     <script src='js/lyrics.js'></script>
 
     <script src='http://localhost:3172/cvg.js'></script>
