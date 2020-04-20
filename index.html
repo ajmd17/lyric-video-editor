@@ -19,6 +19,17 @@
   <head>
     <meta charset="UTF-8">
     <style>
+      @font-face {
+        font-family: 'Postface';
+        src: url('font/Postface.otf') format('opentype');
+        font-weight: normal;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'Milestone';
+        src: url('font/MilestoneFreeVersion-Script.otf') format('opentype');
+
+      }
       html, body {
         font-family: sans-serif;
       }
@@ -362,6 +373,10 @@
       <canvas id="rendering-canvas" width="1080" height="720"></canvas>
     </div>
 
+    <div id="sub-canvas-container" style="display:none">
+      <canvas id="sub-canvas"></canvas>
+    </div>
+
     <script
       src="https://code.jquery.com/jquery-3.4.1.min.js"
       integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
@@ -371,10 +386,14 @@
       integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU="
       crossorigin="anonymous"></script>
     <script src="js/video-to-frames.js"></script>
+    <script src="js/perlin.noise.js"></script>
     <script src="https://unpkg.com/wavesurfer.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.15/lodash.min.js" integrity="sha256-VeNaFBVDhoX3H+gJ37DpT/nTuZTdjYro9yBruHjVmoQ=" crossorigin="anonymous"></script>
     <script src='js/syllables.js'></script>
     <script src='js/lyrics/effects.js'></script>
+    <script src='js/lyrics/effects/ripple.js'></script>
+    <script src='js/lyrics/effects/tv-background.js'></script>
+    <script src='js/lyrics/effects/background-static.js'></script>
     <script src='js/lyrics/structures.js'></script>
     <script src='js/lyrics.js'></script>
 

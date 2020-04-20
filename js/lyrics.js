@@ -251,10 +251,10 @@ class LyricsBuilder {
       imageHeightScaled = imageHeight * scaleRatio
 
     return {
-      x: (canvasWidth / 2) - (imageWidthScaled / 2),
+      x: Math.floor((canvasWidth / 2) - (imageWidthScaled / 2)),
       y: 0,
-      widthScaled: imageWidthScaled,
-      heightScaled: imageHeightScaled
+      widthScaled: Math.floor(imageWidthScaled),
+      heightScaled: Math.floor(imageHeightScaled)
     }
   }
 
@@ -263,7 +263,12 @@ class LyricsBuilder {
 
     // hardcoded for now
     const videoEffects = [
-      new TVStaticEffect()
+      //new BlurryBackgroundImageEffect(),
+      new TVStaticEffect(),
+      new TVStaticLineTransition(),
+      new BouncyBallEffect(),
+      //new TVRippleEffect()
+      new TVBackgroundEffect()
     ]
 
     //this._renderVideoStatusLabel.html('Extracting frames ...')
@@ -282,7 +287,7 @@ class LyricsBuilder {
       const renderedVideoHeight = VIDEO_RENDER_HEIGHT,
         renderedVideoWidth = VIDEO_RENDER_WIDTH,
         totalFrames = Math.ceil(this._totalDuration * FRAMES_PER_SECOND),
-        ctx = this._renderingCanvas.getContext('2d')
+        ctx = this._renderingCanvas.getContext('gl') || this._renderingCanvas.getContext('2d')
 
       this._renderingCanvas.width = renderedVideoWidth
       this._renderingCanvas.height = renderedVideoHeight
@@ -317,21 +322,47 @@ class LyricsBuilder {
         stateData = {
           timeSeconds: 0,
           lyrics: this._currentLyricsObject,
+          currentBackgroundImage: null,
           currentStanza: null,
           currentLineIndex: 0,
           currentLine: null,
-          syllablePercentages: []
+          syllablePercentages: [],
+          syllablesGrouped: [],
+          lyricSection: {
+            syllablePositions: {}, // set during render of frame -- maps syllable to pixel position
+            x: 0,
+            y: this._renderingCanvas.height - 100 - 30,
+            width: this._renderingCanvas.width,
+            height: 100
+          }
         }
 
       const updateStateData = () => {
         const videoPercentage = currentFrame / totalFrames
 
         stateData.lyrics = self._currentLyricsObject
+        stateData.currentBackgroundImage = self._videoBackgroundImage[0]
         stateData.timeSeconds = videoPercentage * self._totalDuration
         stateData.currentStanza = self._currentLyricsObject.stanzaAtTime(stateData.timeSeconds)
         stateData.currentLineIndex = stateData.currentStanza.lineIndexAtTime(stateData.timeSeconds)
         stateData.currentLine = stateData.currentStanza.lines[stateData.currentLineIndex]
         stateData.syllablePercentages = stateData.currentLine.syllablePercentagesAtTime(stateData.timeSeconds, stateData.currentStanza.offset)
+        stateData.syllablesGrouped = self._groupSyllables(stateData.syllablePercentages)
+      }
+
+      const renderEffect = (videoEffect) => {
+        const result = videoEffect.render(self._renderingCanvas, ctx, stateData)
+
+        if (result === null) {
+          // do data returned, do not use
+          return
+        }
+
+        const combinedData = ctx.getImageData(0, 0, self._renderingCanvas.width, self._renderingCanvas.height)
+
+        result.combine(combinedData, self._renderingCanvas)
+
+        ctx.putImageData(combinedData, 0, 0)
       }
 
       function renderTick() {
@@ -353,16 +384,19 @@ class LyricsBuilder {
 
           self._renderVideoStatusLabel.html(`Rendering frame (${frameCount}/${totalFrames}) ...`)
 
-          self._renderFrame(currentFrame, backgroundImagePlacement, stateData)
+          ctx.fillStyle = 'black'
+          ctx.fillRect(
+            0, 0,
+            self._renderingCanvas.width, self._renderingCanvas.height
+          )
 
-          videoEffects.forEach((videoEffect) => {
-            const result = videoEffect.render(self._renderingCanvas, ctx, stateData),
-              combinedData = ctx.getImageData(0, 0, self._renderingCanvas.width, self._renderingCanvas.height)
+          _.filter(videoEffects, (effect) => effect.order == VideoRenderEffect.EffectOrder.PRE)
+            .forEach(renderEffect)
 
-            result.combine(combinedData)
+          self._renderFrame(ctx, backgroundImagePlacement, stateData)
 
-            ctx.putImageData(combinedData, 0, 0)
-          })
+          _.filter(videoEffects, (effect) => effect.order == VideoRenderEffect.EffectOrder.POST)
+            .forEach(renderEffect)
 
           cvg.addFrame(self._renderingCanvas)
 
@@ -382,20 +416,7 @@ class LyricsBuilder {
 
   }
 
-  _renderFrame(frameIndex, backgroundImagePlacement = null, stateData = {}) {
-    const ctx = this._renderingCanvas.getContext('2d')
-
-
-    const lyricSection = {
-      x: 0,
-      y: 0,
-      width: this._renderingCanvas.width,
-      height: 100
-    }
-    ctx.clearRect(
-      0, 0,
-      this._renderingCanvas.width, this._renderingCanvas.height
-    )
+  _renderFrame(ctx, backgroundImagePlacement = null, stateData = {}) {
     //ctx.drawImage(videoFrameBitmap, 0, 0, this._renderingCanvas.width, this._renderingCanvas.height)
 
     // if (backgroundImagePlacement !== null) {
@@ -421,15 +442,14 @@ class LyricsBuilder {
 
     let textOffset = 0,
       totalTextWidth = 0,
-      textBackgroundPadding = 10,
+      textBackgroundPadding = 5,
       textPosition,
-      textBackgroundPosition,
-      textHeight = 48
+      textHeight = 32
 
-    ctx.font = 'italic small-caps bold 48px arial'
+    ctx.font = '32px "Postface"'
 
-    let syllablesGrouped = this._groupSyllables(stateData.syllablePercentages)
-
+    let syllablesGrouped = stateData.syllablesGrouped
+    
     // calculate total text width 
     syllablesGrouped.forEach((group, groupIndex) => {
       group.forEach(([syllable], index) => {
@@ -448,14 +468,18 @@ class LyricsBuilder {
     })
 
     textPosition = (this._renderingCanvas.width / 2) - (totalTextWidth / 2)
-    textBackgroundPosition = textPosition - textBackgroundPadding//(this._renderingCanvas.width / 2) - ((totalTextWidth + textBackgroundPadding * 2) / 2)
+    stateData.lyricSection.x = textPosition - textBackgroundPadding//(this._renderingCanvas.width / 2) - ((totalTextWidth + textBackgroundPadding * 2) / 2)
+    stateData.lyricSection.width = totalTextWidth + (textBackgroundPadding * 2)
+    stateData.lyricSection.height = textHeight + (textBackgroundPadding * 2)
 
-    ctx.fillStyle = 'rgba(105, 105, 105, 0.65)'
+    // stateData.lyricSection.syllablePositions = {}
+
+    ctx.fillStyle = 'rgba(150, 150, 150, 0.7)'
     ctx.fillRect(
-      textBackgroundPosition,
-      lyricSection.y,// - textHeight + textBackgroundPadding,
-      totalTextWidth + (textBackgroundPadding * 2),
-      textHeight + (textBackgroundPadding * 2)
+      stateData.lyricSection.x,
+      stateData.lyricSection.y,// - textHeight + textBackgroundPadding,
+      stateData.lyricSection.width,
+      stateData.lyricSection.height
     )
 
     syllablesGrouped.forEach((group, groupIndex) => {
@@ -472,8 +496,14 @@ class LyricsBuilder {
         } else {
           ctx.fillStyle = '#fff'
         }
+        ctx.textBaseline = "middle"
 
-        ctx.fillText(part, textPosition + textOffset, 50)
+        let syllableX = textPosition + textOffset,
+            syllableY =  stateData.lyricSection.y + (stateData.lyricSection.height / 2)
+
+        ctx.fillText(part, syllableX, syllableY)
+
+        stateData.lyricSection.syllablePositions[`${groupIndex}_${index}`] = [syllableX, syllableY]
 
         textOffset += ctx.measureText(part).width
       })

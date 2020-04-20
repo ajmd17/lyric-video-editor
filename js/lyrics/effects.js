@@ -16,59 +16,76 @@ const BlendMode = {
 }
 
 const blendCombineFunc = {
-  [BlendMode.NO_OP]: (lhs, rhs, index) => {},
-  [BlendMode.NORMAL]: (lhs, rhs, index) => {
+  [BlendMode.NO_OP]: (lhs, rhs, lhsIndex, rhsIndex) => {},
+  [BlendMode.NORMAL]: (lhs, rhs, lhsIndex, rhsIndex) => {
     for (let i = 0; i < 4; i++) {
-      lhs[i + index] = rhs[i + index]
+      lhs[i + lhsIndex] = rhs[i + rhsIndex]
     }
   },
-  [BlendMode.ADDITIVE]: (lhs, rhs, index) => {
+  [BlendMode.NORMAL_MUL_ALPHA]: (lhs, rhs, lhsIndex, rhsIndex) => {
     for (let i = 0; i < 3; i++) {
-      lhs[i + index] += rhs[i + index]
+      lhs[i + lhsIndex] = lerp(lhs[i + lhsIndex], rhs[i + rhsIndex], rhs[3 + rhsIndex] / 255)
     }
   },
-  [BlendMode.SUBTRACTIVE]: (lhs, rhs, index) => {
+  [BlendMode.ADDITIVE]: (lhs, rhs, lhsIndex, rhsIndex) => {
     for (let i = 0; i < 4; i++) {
-      lhs[i + index] -= rhs[i + index]
+      lhs[i + lhsIndex] += rhs[i + rhsIndex]
+    }
+  },
+  [BlendMode.SUBTRACTIVE]: (lhs, rhs, lhsIndex, rhsIndex) => {
+    for (let i = 0; i < 4; i++) {
+      lhs[i + lhsIndex] -= rhs[i + rhsIndex]
     }
   }
 }
 
 class EffectResult {
-  constructor(blendMode, resultData, options) {
+  constructor(blendMode, resultData, offset = [0, 0], size = [null, null], options = {}) {
     this.blendMode = blendMode
     this.resultData = resultData
+    this.offset = offset
+
+    if (size[0] === null) size[0] = resultData.width
+    if (size[1] === null) size[1] = resultData.height
+
+    this.size = size
     this.options = options
   }
 
-  combine(imageData) {
-    if (imageData.data.length != this.resultData.data.length) {
-      throw Error('Cannot blend effect result; ImageData sizes differ ('
-        + imageData.data.length + ' != ' + this.resultData.data.length + ')')
-    }
-
+  combine(imageData, canvas) {
     const opacity = _.isNumber(this.options.opacity)
       ? this.options.opacity
       : 1.0
 
-    for (let i = 0; i < imageData.data.length; i += 4) {
-      let prevValues = [imageData.data[i], imageData.data[i + 1], imageData.data[i + 2], imageData.data[i + 3]]
+    for (let x = 0; x < Math.floor(this.size[0]); x++) {
+      for (let y = 0; y < Math.floor(this.size[1]); y++) {
+        let thisIndex = (x + y * Math.floor(this.size[0])) * 4,
+          outputIndex = ((x + Math.floor(this.offset[0])) + (y + Math.floor(this.offset[1])) * canvas.width) * 4
+        
+        let prevValues = [imageData.data[outputIndex], imageData.data[outputIndex + 1], imageData.data[outputIndex + 2], imageData.data[outputIndex + 3]]
 
-      blendCombineFunc[this.blendMode](imageData.data, this.resultData.data, i)
+        blendCombineFunc[this.blendMode](imageData.data, this.resultData.data, outputIndex, thisIndex)
 
-      if (opacity < 1.0) {
-        imageData.data[i]     = lerp(prevValues[0], imageData.data[i], opacity)
-        imageData.data[i + 1] = lerp(prevValues[1], imageData.data[i + 1], opacity)
-        imageData.data[i + 2] = lerp(prevValues[2], imageData.data[i + 2], opacity)
-        imageData.data[i + 3] = lerp(prevValues[3], imageData.data[i + 3], opacity)
+        if (opacity < 1.0) {
+          imageData.data[outputIndex]     = lerp(prevValues[0], imageData.data[outputIndex], opacity)
+          imageData.data[outputIndex + 1] = lerp(prevValues[1], imageData.data[outputIndex + 1], opacity)
+          imageData.data[outputIndex + 2] = lerp(prevValues[2], imageData.data[outputIndex + 2], opacity)
+          imageData.data[outputIndex + 3] = lerp(prevValues[3], imageData.data[outputIndex + 3], opacity)
+        }
       }
     }
   }
 }
 
 class VideoRenderEffect {
-  constructor(blendMode, options = { opacity: 1.0 }) {
+  static EffectOrder = {
+    POST: 0,
+    PRE: 1
+  }
+
+  constructor(blendMode, order = VideoRenderEffect.EffectOrder.POST, options = { opacity: 1.0 }) {
     this.blendMode = blendMode
+    this.order = order
     this.options = options
   }
 
@@ -77,19 +94,27 @@ class VideoRenderEffect {
   }
 
   render(canvas, context, effectStateData) {
-    return new EffectResult(this.blendMode, this.renderFrame(canvas, context, effectStateData), this.options)
+    const data = this.renderFrame(canvas, context, effectStateData)
+
+    if (data == null) {
+      return null
+    }
+
+    return new EffectResult(this.blendMode, data.imageData, data.offset, data.size, this.options)
   }
 }
 
 class LineTransitionEffect extends VideoRenderEffect {
-  static EFFECT_BEGIN_OFFSET = 0.15
-  static EFFECT_END_OFFSET = 0.15
+  static EFFECT_BEGIN_OFFSET = 0.18
+  static EFFECT_END_OFFSET = 0.18
 
   constructor(blendMode, options) {
-    super(blendMode, options)
+    super(blendMode, VideoRenderEffect.EffectOrder.POST, options)
+
+    this.options.baseOpacity = this.options.baseOpacity || 0.0
   }
 
-  _renderTransition(canvas, context, transitionPhase) {
+  _renderTransition(canvas, context, effectStateData, phase) {
     throw Error('not implemented')
   }
 
@@ -175,18 +200,178 @@ class LineTransitionEffect extends VideoRenderEffect {
     let prevPhase = 1 - (Math.min(1, prevNum / prevDenom))
     let phase = prevPhase + nextPhase
 
-    this.options.opacity = phase
+    if (this.options.baseOpacity > 0.0) {
+      this.options.opacity = lerp(this.options.baseOpacity, 1.0, phase)
+    } else {
+      this.options.opacity = phase
+    }
   
-    return this._renderTransition(canvas, context, phase)
+    // optimization: don't compute transition
+    if (this.options.opacity <= 0.0001) {
+      return null
+    }
+
+    return this._renderTransition(canvas, context, effectStateData, phase)
+  }
+}
+
+// a bouncy ball that follows the active syllable
+class BouncyBallEffect extends VideoRenderEffect {
+  constructor(radius = 8, bounceHeight = 10) {
+    super(BlendMode.NORMAL_MUL_ALPHA, VideoRenderEffect.EffectOrder.POST)
+
+    this.radius = radius
+    this.bounceHeight = bounceHeight
+    this.size = [radius * 2, radius * 2]
+    this.imageData = null
+  }
+
+  renderFrame(canvas, context, effectStateData) {
+    let currentSyllable = null,
+        nextSyllable = null
+
+    _.forEach(effectStateData.syllablesGrouped, (group, groupIndex) => {
+      let groupResult = _.forEach(group, ([syllable, percentage], index) => {
+        if (percentage < 1.0 && percentage > 0.0) {
+          currentSyllable = {
+            syllable,
+            percentage,
+            index,
+            groupIndex
+          }
+
+          let nextGroup,
+              nextGroupIndex,
+              nextIndex
+
+          if (index == group.length - 1) {
+            if (groupIndex == effectStateData.syllablesGrouped.length - 1) {
+              nextGroupIndex = groupIndex
+              nextGroup = group
+              nextIndex = index
+            } else {
+              nextGroupIndex = groupIndex + 1
+              nextGroup = effectStateData.syllablesGrouped[nextGroupIndex]
+              nextIndex = 0
+            }
+
+          } else {
+            nextGroupIndex = groupIndex
+            nextGroup = group
+            nextIndex = index + 1
+          }
+
+          nextSyllable = {
+            syllable: nextGroup[nextIndex][0],
+            percentage: nextGroup[nextIndex][1],
+            index: nextIndex,
+            groupIndex: nextGroupIndex
+          }
+
+          return false
+        }
+      })
+
+      if (groupResult === false) {
+        return false
+      }
+    })
+
+    if (currentSyllable == null) {
+      return
+    }
+
+    let currentPosition = effectStateData.lyricSection.syllablePositions[`${currentSyllable.groupIndex}_${currentSyllable.index}`],
+        nextPosition = effectStateData.lyricSection.syllablePositions[`${nextSyllable.groupIndex}_${nextSyllable.index}`]
+
+    let position = [
+      lerp(currentPosition[0], nextPosition[0], currentSyllable.percentage),
+      lerp(currentPosition[1] - 40 - this.bounceHeight, currentPosition[1] - 40, Math.abs((currentSyllable.percentage) * 2.0 - 1.0))
+    ]
+
+    //position[1] = lerp(position[1], currentPosition[1] - this.bounceHeight, 1 / Math.pow(1 / currentSyllable.percentage, 2))
+
+    if (this.imageData === null) {
+      this.imageData = context.createImageData(this.size[0], this.size[1])
+    }
+
+    const radiusSq = Math.pow(this.radius, 2),
+          sharpness = this.radius / 4
+
+    for (let x = -this.radius; x < this.radius; x++) {
+      for (let y = -this.radius; y < this.radius; y++) {
+        let absX = x + this.radius,
+            absY = y + this.radius,
+            index = (absX + absY * (this.radius * 2)) * 4
+
+        if (x * x + y * y <= radiusSq) {
+          this.imageData.data[index] = 255
+          this.imageData.data[index + 1] = 0
+          this.imageData.data[index + 2] = 0
+          this.imageData.data[index + 3] = (sharpness * (1.0 - ((x * x + y * y) / radiusSq))) * 255
+        } else {
+          this.imageData.data[index + 3] = 0
+        }
+      }
+    }
+
+    return {
+      offset: position,
+      size: this.size,
+      imageData: this.imageData
+    }
+  }
+}
+
+class BlurryBackgroundImageEffect extends VideoRenderEffect {
+  constructor(grayscale = 0.5) {
+    super(BlendMode.NORMAL, VideoRenderEffect.EffectOrder.PRE)
+
+    this.grayscale = grayscale
+  }
+
+  get _filter() {
+    let filter = 'blur(4px)'
+
+    if (this.grayscale > 0.0) {
+      filter += ` grayscale(${this.grayscale * 100}%)`
+    }
+
+    return filter
+  }
+
+  renderFrame(canvas, context, effectStateData) {
+    const scalingRatio = effectStateData.currentBackgroundImage.width / canvas.width
+
+    let width = Math.floor(canvas.width),
+        height = Math.floor(effectStateData.currentBackgroundImage.height / scalingRatio)
+
+    context.filter = this._filter
+    context.drawImage(
+      effectStateData.currentBackgroundImage,
+      0, 0,
+      effectStateData.currentBackgroundImage.naturalWidth, effectStateData.currentBackgroundImage.naturalHeight,
+      0, Math.floor((canvas.height / 2) - (height / 2)),
+      width, height
+    )
+    context.filter = 'blur(0px) grayscale(0%)'
+
+    return {
+      offset: [0, 0],
+      size: [canvas.width, canvas.height],
+      imageData: context.getImageData(0, 0, canvas.width, canvas.height)
+    }
   }
 }
 
 // inspired by https://codepen.io/alenaksu/pen/dGjeMZ
-class TVStaticEffect extends LineTransitionEffect {
+class TVStaticLineTransition extends LineTransitionEffect {
   static SAMPLES = 10
 
   constructor() {
-    super(BlendMode.ADDITIVE)
+    super(BlendMode.ADDITIVE, {
+      baseOpacity: 0.6
+    })
 
     this.scanSpeed = FRAMES_PER_SECOND * 15
     this.scanSize = 0
@@ -231,19 +416,19 @@ class TVStaticEffect extends LineTransitionEffect {
 		return imageData
   }
 
-  _createSamples(canvas, context) {
+  _createSamples(canvas, context, width, height) {
     this.scanSize = (canvas.offsetHeight / this.scaleFactor) / 3
 
     this.samples = []
 
-    for (let i = 0; i < TVStaticEffect.SAMPLES; i++) {
-      this.samples.push(this._randomSample(context, canvas.width, canvas.height))
+    for (let i = 0; i < TVStaticLineTransition.SAMPLES; i++) {
+      this.samples.push(this._randomSample(context, width, height))
     }
   }
 
-  _renderTransition(canvas, context, transitionPhase) {
+  _renderTransition(canvas, context, effectStateData, phase) {
     if (this.scanSize == 0) {
-      this._createSamples(canvas, context)
+      this._createSamples(canvas, context, canvas.width, effectStateData.lyricSection.height)
     }
 
     let sampleData = this.samples[Math.floor(this.sampleIndex)]
@@ -254,6 +439,10 @@ class TVStaticEffect extends LineTransitionEffect {
       this.sampleIndex = 0
     }
 
-    return sampleData
+    return {
+      offset: [effectStateData.lyricSection.x, effectStateData.lyricSection.y],
+      size: [effectStateData.lyricSection.width, effectStateData.lyricSection.height],
+      imageData: sampleData
+    }
   }
 }
