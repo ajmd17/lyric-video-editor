@@ -10,7 +10,7 @@ class TVBackgroundEffect extends VideoRenderEffect {
     this.imageData = null
 
     this.img = document.createElement('img')
-    this.img.src = 'images/tv.png'
+    this.img.src = 'images/tv_gr2.png'
 
     this._subCanvas = document.getElementById('sub-canvas')
     this._subCanvas.width = TVBackgroundEffect.HOLE_WIDTH
