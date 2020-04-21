@@ -1,5 +1,5 @@
 const PIXELS_PER_SEC = 10,
-  FRAMES_PER_SECOND = 30,
+  FRAMES_PER_SECOND = 20,
   VIDEO_RENDER_HEIGHT = 720,
   VIDEO_RENDER_WIDTH = 1080
 
@@ -263,11 +263,11 @@ class LyricsBuilder {
 
     // hardcoded for now
     const videoEffects = [
-      //new BlurryBackgroundImageEffect(),
       new TVStaticEffect(),
-      new TVStaticLineTransition(),
       new BouncyBallEffect(),
-      //new TVRippleEffect()
+      //new AnimateModifierEffect(new NoSignalEffect(), 0, 2),
+      //new BlendModifierEffect(new NoSignalEffect(), new TVStaticEffect(BlendMode.NORMAL), 0.9),
+      new AnimateModifierEffect(new BlendDeltaModifierEffect(new NoSignalEffect(), new TVStaticEffect(BlendMode.NORMAL), 0.5, 0.9, 0, 5), 0, 5),
       new TVBackgroundEffect()
     ]
 
@@ -317,10 +317,11 @@ class LyricsBuilder {
       )
 
       let self = this,
-        currentFrame = 6500,
+        currentFrame = 0,
         frameCount = currentFrame + 1,
         stateData = {
           timeSeconds: 0,
+          totalDuration: this._totalDuration,
           lyrics: this._currentLyricsObject,
           currentBackgroundImage: null,
           currentStanza: null,
@@ -360,7 +361,7 @@ class LyricsBuilder {
 
         const combinedData = ctx.getImageData(0, 0, self._renderingCanvas.width, self._renderingCanvas.height)
 
-        result.combine(combinedData, self._renderingCanvas)
+        result.applyToImageData(combinedData, self._renderingCanvas)
 
         ctx.putImageData(combinedData, 0, 0)
       }
@@ -399,6 +400,15 @@ class LyricsBuilder {
             .forEach(renderEffect)
 
           cvg.addFrame(self._renderingCanvas)
+
+          const buffer = Math.floor(60 / FRAMES_PER_SECOND)
+
+          // re-add frame to fill 60 fps
+          if (buffer > 1) {
+            for (let i = 0; i < buffer - 1; i++) {
+              cvg.addFrame(self._renderingCanvas)
+            }
+          }
 
           currentFrame = frameCount
 

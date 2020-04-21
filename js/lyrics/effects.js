@@ -52,7 +52,7 @@ class EffectResult {
     this.options = options
   }
 
-  combine(imageData, canvas) {
+  applyToImageData(imageData, canvas) {
     const opacity = _.isNumber(this.options.opacity)
       ? this.options.opacity
       : 1.0
@@ -98,6 +98,10 @@ class VideoRenderEffect {
 
     if (data == null) {
       return null
+    }
+
+    if (data instanceof EffectResult) {
+      return data
     }
 
     return new EffectResult(this.blendMode, data.imageData, data.offset, data.size, this.options)

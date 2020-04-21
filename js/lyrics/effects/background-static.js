@@ -1,8 +1,8 @@
 class TVStaticEffect extends VideoRenderEffect {
   static SAMPLES = 10
 
-  constructor(order = VideoRenderEffect.EffectOrder.POST) {
-    super(BlendMode.ADDITIVE, order)
+  constructor(blendMode = BlendMode.ADDITIVE, order = VideoRenderEffect.EffectOrder.POST) {
+    super(blendMode, order)
 
     this.scanSpeed = FRAMES_PER_SECOND * 15
     this.scanSize = 0
