@@ -35,6 +35,16 @@ class Lyrics {
 
       stanza.duration = stanzaDuration
 
+      if (stanza.$element) {
+        stanza.$element.find('.time-offset')
+          .attr('data-seconds', stanza.offset.toFixed(2))
+          .html(getTimeHHMMSS(stanza.offset))
+
+        stanza.$element.find('.time-duration')
+          .attr('data-seconds', (stanza.offset + stanza.duration).toFixed(2))
+          .html(getTimeHHMMSS(stanza.offset + stanza.duration))
+      }
+
       stanza.updateLineDurations()
     })
   }
@@ -62,8 +72,8 @@ class Stanza {
   constructor(stanza, type = Stanza.Type.UNSET, duration = 0, offset = 0) {
     this.type = type
     this.originalStanza = stanza
-    this.duration = duration
-    this.offset = offset
+    this.duration = _.isNumber(duration) ? Math.max(0, duration) : 0
+    this.offset = _.isNumber(offset) ? Math.max(0, offset) : 0
     this.$element = null
 
     if (_.isEmpty(stanza)) {
@@ -89,10 +99,24 @@ class Stanza {
   updateLineDurations() {
     // setup line durations
     this.lines.forEach((line, lineIndex) => {
+      line.offset = Math.min(line.offset, this.duration)
+
       if (lineIndex == this.lines.length - 1) {
         line.duration = this.duration - line.offset
       } else {
         line.duration = this.lines[lineIndex + 1].offset - line.offset
+      }
+
+      if (line.$element) {
+        const lineOffset = this.getAbsoluteTimeOfLine(line)
+
+        line.$element.find('.time-offset')
+          .attr('data-seconds', lineOffset.toFixed(2))
+          .html(getTimeHHMMSS(lineOffset))
+
+          line.$element.find('.time-duration')
+          .attr('data-seconds', (lineOffset + line.duration).toFixed(2))
+          .html(getTimeHHMMSS(lineOffset + line.duration))
       }
 
       line.updateSyllableDurations()
@@ -120,17 +144,26 @@ class Stanza {
 class Line {
   constructor(line, duration = 0, offset = 0) {
     this.originalLine = line
-    this.duration = duration
-    this.offset = offset
+    this.duration = _.isNumber(duration) ? Math.max(0, duration) : 0
+    this.offset = _.isNumber(offset) ? Math.max(0, offset) : 0
     this.$element = null
 
     /** @type {string[]} */
     this.syllables = this._buildSyllables()
   }
 
+  setContent(line) {
+    this.originalLine = line
+    this.syllables = this._buildSyllables()
+  }
+
   syllablePercentagesAtTime(timeSeconds, stanzaOffset) {
     const syllablesSortedIndices = _.sortBy(
-      this.syllables.map((syllable, index) => ({ time: stanzaOffset + this.offset + syllable.offset, index })),
+      this.syllables.map((syllable, index) => {
+        return {
+          time: stanzaOffset + this.offset + (syllable.offset), index 
+        }
+      }),
       'time'
     )
 
@@ -138,20 +171,46 @@ class Line {
     return syllablesSortedIndices.map(({ time, index }) => {
       const syllable = this.syllables[index],
             relativeTime = Math.min(timeSeconds - time, syllable.duration),
-            progressValue = (relativeTime / syllable.duration)
+            progressValue = relativeTime / syllable.duration
 
       return [syllable, progressValue]
     })
   }
 
   updateSyllableDurations() {
+    // sum up all (current) syllable durations
+    // if it flows over the amount of time allotted to this line,
+    // we have to reduce the duration of each line to the point that sum should == duration
+    /*const sum = Math.max(0, _.sumBy(this.syllables, 'duration'))
+
+    if (!isNaN(sum) && sum > this.duration) { // overflowing. need to reduce offsets for the recalculation.
+      const quotient = sum / this.duration
+
+      _.forEach(this.syllables, (syllable) => syllable.offset /= quotient)
+    }
+
     this.syllables.forEach((syllable, syllableIndex) => {
       if (syllableIndex == this.syllables.length - 1) {
-        syllable.duration = this.duration - syllable.offset
+        syllable.duration = Math.max(0, this.duration - syllable.offset)
       } else {
         syllable.duration = this.syllables[syllableIndex + 1].offset - syllable.offset
       }
+    })*/
+
+    this.syllables.forEach((syllable, syllableIndex) => {
+      syllable.duration = this.duration / this.syllables.length
+      syllable.offset = syllableIndex * syllable.duration
     })
+
+    // console.log('sum = ', sum)
+    // console.log('duration = ', this.duration)
+
+    // if (sum > this.duration) {
+    //   this.syllables.forEach((syllable, syllableIndex) => {
+    //     syllable.offset /= (sum / this.duration)
+    //     syllable.duration /= (sum / this.duration)
+    //   })
+    // }
   }
 
   /** @param {Syllable} syllable */
@@ -181,8 +240,8 @@ class Syllable {
   constructor(syllable, originalWord, duration = 0, offset = 0) {
     this.syllable = syllable
     this.originalWord = originalWord
-    this.duration = duration
-    this.offset = offset
+    this.duration = _.isNumber(duration) ? Math.max(0, duration) : 0
+    this.offset = _.isNumber(offset) ? Math.max(0, offset) : 0
   }
 
   toJSON() {

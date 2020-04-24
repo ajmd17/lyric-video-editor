@@ -1,9 +1,11 @@
 class TVStaticEffect extends VideoRenderEffect {
   static SAMPLES = 10
 
-  constructor(blendMode = BlendMode.ADDITIVE, order = VideoRenderEffect.EffectOrder.POST) {
+  constructor(options = {}, blendMode = BlendMode.ADDITIVE, order = VideoRenderEffect.EffectOrder.POST) {
     super(blendMode, order)
 
+    this.speed = options.speed || new DynamicNumber(20)
+    this.opacity = options.opacity || new DynamicNumber(1)
     this.scanSize = 0
     this.scanOffsetY = 0
     this.sampleIndex = 0
@@ -70,15 +72,16 @@ class TVStaticEffect extends VideoRenderEffect {
 
     let sampleData = this.samples[Math.floor(this.sampleIndex)]
 
-    this.sampleIndex += 20 / FRAMES_PER_SECOND
+    this.sampleIndex += this.speed.value(effectStateData) / FRAMES_PER_SECOND
 
     if (this.sampleIndex >= this.samples.length) {
       this.sampleIndex = 0
     }
 
-    //this.options.opacity = lerp(0.8, 1, (Math.sin(this.time) * 0.5 + 0.5))
-    //this.options.opacity = 1
-    this.time += 0.2
+    // this.options.opacity = lerp(0.8, 1, (Math.sin(this.time) * 0.5 + 0.5))
+    // this.options.opacity = 1
+    // this.time += 0.2
+    this.options.opacity = this.opacity.value(effectStateData)
 
     return {
       offset: [0, 0],

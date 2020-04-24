@@ -34,6 +34,7 @@
         font-family: sans-serif;
       }
 
+      #video-container,
       #video-preview {
         width: 1080px;
       }
@@ -91,12 +92,21 @@
       .track-element,
       #stanza-lines-overlay .line {
         position: absolute;
-        height: 30px;
+        min-height: 30px;
+        max-height: 60px;
         min-width: 40px;
         background: red;
         color: white;
         z-index: 10;
         box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      }
+      .track-element a,
+      #stanza-lines-overlay .line a {
+        color: white;
+      }
+      .track-element .line-value,
+      #stanza-lines-overlay .line .line-value {
+        height: 40px;
       }
       .track-element .content {
         padding: 2px 3px;
@@ -143,12 +153,12 @@
       #track-elements,
       #stanza-lines-overlay {
         position: relative;
-        overflow-x: hidden;
+        /* overflow-x: hidden; */
         display: block;
         margin-top: 10px;
         min-height: 50px;
         box-sizing: content-box;
-        /* width: 100%; */
+        width: 100%;
         font-size: 10px;
       }
 
@@ -242,7 +252,7 @@
         /* display: inline-block; */
         background: blue;
         /* color: white; */
-        width: 60px;
+        /* width: 60px; */
         /* font-size: 12px; */
         /* z-index: 10; */
       }
@@ -271,6 +281,11 @@
         border-bottom-color: blue;
         transform: rotateZ(180deg);
       } */
+
+      #markers-container {
+        overflow-x: hidden;
+      }
+
     </style>
   </head>
   <body>
@@ -283,7 +298,7 @@
               <div id="line-overlay"></div>
             </div>
           </div>
-          <audio id="audio-element" src="example_data/test_audio.mp3" controls></audio>
+          <audio id="audio-element" src="example_data/sucker_punch.wav" controls></audio>
         </div>
         <div id="audio-container"></div>
         <div id="controls-overlay">
@@ -308,8 +323,10 @@
         </div>
         
         <div id="wavesurfer">
-          <div id="stanza-lines-overlay"></div>
-          <div id="track-elements"></div>
+          <div id="markers-container">
+            <div id="stanza-lines-overlay"></div>
+            <div id="track-elements"></div>
+          </div>
 
         </div>
 
@@ -317,61 +334,69 @@
 
       <div class="lyrics">
         <textarea id="lyrics-content">
-          They say it's got a hold on me
-          I just can't accept it
-          My sweet tooth is worse than I expected, oh no
-          
-          I think I've got the hang of this
-          A little more and I will get my fix
-          Keep my nose cleaned and leave it behind
-          
-          And I go, and I go, and I go my way (x2)
-          And I try to let it go
-          
-          Hey! A little help in here
-          Hey! I wanna disappear
-          Let me take control and bring me back to life
-          
-          Hey! A little help in here
-          Make my vision crystal clear
-          I’m tired of seeing red and I wanna take control
-          Cause I’ve got to let it go before it takes a toll
-          On me
-          
-          I made a promise I can’t keep
-          My will is far too weak
-          A seed of something so deeply buried inside
-          My soul
-          
-          And I go, and I go, and I go my way (x2)
-          And I try to let it go
-          
-          Hey! A little help in here
-          Hey! I wanna disappear
-          Let me take control and bring me back to life
-          
-          Hey! A little help in here
-          Make my vision crystal clear
-          I’m tired of seeing red and I wanna take control
-          Gotta let it go before it takes a toll on me, yeah
-          
-          I’m on the run and I can’t look back
-          Gotta let it go, gotta let it slide
-          I wanna run and I can’t look back, oh no
-          I’m on the run and I can’t look back
-          Gotta let it go, gotta let it slide
-          I wanna run, I’ll run, I’ll run, yeah
-          
-          Hey! A little help in here
-          Hey! I wanna disappear
-          Let me take control and bring me back to life
-          
-          Hey! A little help in here
-          Make my vision crystal clear
-          I’m tired of seeing red and I wanna take control
-          Gotta let it go before it takes a toll on me
-          And I’m doing what I can took keep my spirit clean
+          I lie awake in bed at night
+          Over-thinking things I’ve said
+          Was stupid a’ me to run my mouth
+          What was I thinking, half-believing you care
 
+          You brush me off so easily
+          You’re gonna leave me in the dust
+          I’m sinking in the quicksand, tell me
+          What does it feel like walking on air?
+
+          Feeling like I'm old in my youth
+          Cause my cracked spine can’t seem to face the truth
+
+          Maybe I’m a freak
+          Maybe I’m naive
+          Maybe I’m just dreaming I'm something I’ll never be
+
+          Maybe I’m a freak
+          Maybe I’m naive
+          Or maybe, I’m a sucker for you
+
+          Now that we’re on the mend
+          I won’t forget to take my meds
+          So I just empty the bottle
+          All over the floor
+
+          Those demons won't come 'round no more
+
+          I’m as tattered as the holes in my jeans
+          My nerves are worn and tattered all stitched at the seams!
+          
+          Maybe I’m a freak
+          Maybe I’m naive
+          Maybe I’m just dreaming I'm something I’ll never be
+
+          Maybe I’m a freak
+          Maybe I’m naive
+          Or maybe, I’m a sucker for you
+
+          And this winter’s been so c-c-c-cold...
+          Like your fall from grace, where you lost all control
+          Don't get me wrong
+          I would fall if you let me cause you’re always out to get me
+
+          So just sink your teeth into me, bite down and chew to the bone!
+          I'll drive to the city and break down the door of your home!
+
+          Well it hurts when it's over
+          Got me crying on your shoulder
+          Hopin' you won't be leaving too long
+          Well, I'm a sucker, and you knew it all along
+
+          I said maybe I’m a freak
+          Maybe I’m naive
+          Maybe I’m just dreaming I'm something I’ll never be
+
+          Maybe I’m a freak
+          Maybe I’m naive
+          Or maybe, I’m a sucker for you
+          I said maybe, oh maybe it's the truth
+          Maybe, I’m a sucker
+          Maybe I'm a sucker, ohhhh
+          Maybe I'm a sucker for you
         </textarea>
         <button id="load-saved-btn" onclick="lyricsBuilder.loadFromSave()">
           Load saved
@@ -415,9 +440,12 @@
     <script src='js/lyrics/effects/background-static.js'></script>
     <script src='js/lyrics/effects/tv-power.js'></script>
     <script src='js/lyrics/effects/no-signal.js'></script>
+    <script src='js/lyrics/effects/bouncy-ball.js'></script>
+    <script src='js/lyrics/effects/blurry-background-image.js'></script>
     <script src='js/lyrics/effects/modifiers/animate-modifier.js'></script>
     <script src='js/lyrics/effects/modifiers/blend-modifier.js'></script>
     <script src='js/lyrics/effects/modifiers/blend-delta-modifier.js'></script>
+    <script src='js/lyrics/effects/value.js'></script>
     <script src='js/lyrics/structures.js'></script>
     <script src='js/lyrics/index.js'></script>
 

@@ -72,17 +72,25 @@ app.post('/addFrame', function(req, res) {
 app.post('/render', function(req, res) {
   const fps = req.params.fps || req.body.fps || 60
 
+  // hardcoded for now -- maybe s3 or just direct file uploading could come later
+  const audioPath = path.join(__dirname, '../web/example_data/sucker_punch.wav')
+
   Promise.all(Object.values(fileWritePromises)).then(() => {
     var oldTemp = tempDir;
     console.log("Begining rendering of your video. This might take a long time...")
+
     var ffmpeg = cp.spawn('ffmpeg', [
       '-framerate', fps,
       '-start_number', '0',
       '-i', 'image-%010d.png',
+      '-i', audioPath,
       '-refs', '5',
       '-c:v', 'libx264',
       '-preset', 'veryfast',
       '-crf', '18',
+      '-c:a', 'aac',
+      '-map', '0:v:0',
+      '-map', '1:a:0',
       sprintf('%s/%s.mp4', OUTDIR, req.body.filename)
     ], {
       cwd: oldTemp.name,
