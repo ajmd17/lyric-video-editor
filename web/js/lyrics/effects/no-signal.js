@@ -1,9 +1,4 @@
 class NoSignalEffect extends VideoRenderEffect {
-  // static ROWS = [
-  //   ['white', 'yellow', 'cyan', 'lime', 'magenta', 'red', 'blue'],
-  //   ['blue', 'black', 'magenta', 'black', 'cyan', 'black', 'white'],
-  //   ['very light blue', 'white', 'dark blue', 'black', 'very dark gray', 'black']
-  // ]
   static ROWS = [
     [[255, 255, 255], [255, 255, 0], [0, 255, 255], [0, 255, 0], [255, 0, 255], [255, 0, 0], [0, 0, 255]],
     [[0, 0, 255], [0, 0, 0], [255, 0, 255], [0, 0, 0], [0, 255, 255], [0, 0, 0], [255, 255, 255]],
@@ -16,8 +11,8 @@ class NoSignalEffect extends VideoRenderEffect {
     0.2
   ]
 
-  constructor() {
-    super(BlendMode.NORMAL, VideoRenderEffect.EffectOrder.POST)
+  constructor(blendMode = BlendMode.NORMAL, order = VideoRenderEffect.EffectOrder.POST) {
+    super(blendMode, order)
 
     this.imageData = null
   }

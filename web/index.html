@@ -28,7 +28,16 @@
       @font-face {
         font-family: 'Milestone';
         src: url('font/MilestoneFreeVersion-Script.otf') format('opentype');
-
+      }
+      @font-face {
+        font-family: 'Postface';
+        src: url('font/Postface.otf') format('opentype');
+        font-weight: normal;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'VCR';
+        src: url('font/VCR_OSD_MONO_1.001.ttf') format('truetype');
       }
       html, body {
         font-family: sans-serif;
@@ -141,7 +150,6 @@
         content: "";
         width: 0; 
         height: 0;
-
         top: 30px;
         margin-left: -7px;
         border-left: 7px solid transparent;
@@ -153,7 +161,6 @@
       #track-elements,
       #stanza-lines-overlay {
         position: relative;
-        /* overflow-x: hidden; */
         display: block;
         margin-top: 10px;
         min-height: 50px;
@@ -209,7 +216,6 @@
         color: white;
         height: 22px;
         width: 70px;
-        /* padding: 5px 8px; */
         pointer-events: all;
       }
       #line-overlay .line .syllable .positive {
@@ -235,26 +241,11 @@
       #line-overlay .line .syllable .negative span {
         position: absolute;
         display: block;
-        /* height: 100%; */
         width: 70px;
         text-align: center;
       }
-
-
-      /* #stanza-lines-overlay {
-        position: absolute;
-        width: 100%;
-        z-index: 10;
-        top: 0;
-      } */
       #stanza-lines-overlay .line {
-        /* position: absolute; */
-        /* display: inline-block; */
         background: blue;
-        /* color: white; */
-        /* width: 60px; */
-        /* font-size: 12px; */
-        /* z-index: 10; */
       }
       #stanza-lines-overlay .line .progress-container {
         width: 100%;
@@ -293,7 +284,7 @@
       <div id="video-container">
         <div id="video-preview">
           <div id="video-background-image-container">
-            <img id="video-background-image" src="example_data/test_img.png"></img>
+            <img id="video-background-image" src="example_data/sucker_punch.png"></img>
             <div id="video-preview-content">
               <div id="line-overlay"></div>
             </div>
@@ -398,15 +389,9 @@
           Maybe I'm a sucker, ohhhh
           Maybe I'm a sucker for you
         </textarea>
-        <button id="load-saved-btn" onclick="lyricsBuilder.loadFromSave()">
-          Load saved
-        </button>
-        <button id="generate-lyrics-btn" onclick="lyricsBuilder.build()">
-          Generate Lyrics
-        </button>
-        <button id="render-video-btn" onclick="lyricsBuilder.renderVideo()">
-          Render Video
-        </button>
+        <button id="load-saved-btn">Load previously opened</button>
+        <button id="generate-lyrics-btn">Auto-generate placements</button>
+        <button id="render-video-btn">Render Video</button>
         <span id="render-video-status-label"></span>
       </div>
 
@@ -416,9 +401,17 @@
       <canvas id="rendering-canvas" width="1080" height="720"></canvas>
     </div>
 
+    <div id="render-buffer-elements" style="display:none">
+    </div>
+
     <div id="sub-canvas-container" style="display:none">
       <canvas id="sub-canvas"></canvas>
     </div>
+
+    <div style="font-family: 'Postface';">font pre-load</div>
+    <div style="font-family: 'VCR';">font pre-load</div>
+
+    <video id='tv-turn-off' preload="auto" src='/example_data/tv_turn_off_2.m4v' style='display:none'>
 
     <script
       src="https://code.jquery.com/jquery-3.4.1.min.js"
@@ -444,6 +437,9 @@
     <script src='js/lyrics/effects/bouncy-ball.js'></script>
     <script src='js/lyrics/effects/glitch.js'></script>
     <script src='js/lyrics/effects/blurry-background-image.js'></script>
+    <script src='js/lyrics/effects/image-overlay.js'></script>
+    <script src='js/lyrics/effects/video-overlay.js'></script>
+    <script src='js/lyrics/effects/signal-text.js'></script>
     <script src='js/lyrics/effects/modifiers/animate-modifier.js'></script>
     <script src='js/lyrics/effects/modifiers/blend-modifier.js'></script>
     <script src='js/lyrics/effects/modifiers/blend-delta-modifier.js'></script>
@@ -451,6 +447,96 @@
     <script src='js/lyrics/effects/value.js'></script>
     <script src='js/lyrics/structures.js'></script>
     <script src='js/lyrics/index.js'></script>
+
+    <script>
+      // this is hardcoded at the moment,
+      // no way to manipulate through UI.
+      // when the project is rewritten, this can be dealt with
+      const EXAMPLE_VIDEO_EFFECTS = [
+        new TVStaticEffect({ mode: 1, speed: new DynamicNumber(40), opacity: new DynamicNumber(0.18) }),
+        new BouncyBallEffect(),
+        new AnimateModifierEffect(
+          new BlendDeltaModifierEffect(
+            new MergeModifierEffect(
+              [
+                new NoSignalEffect(BlendMode.NO_TRANSPARENCY),
+                new SignalTextEffect(
+                  'GET REAL!',
+                  new DynamicNumber(200),
+                  new DynamicNumber(150)
+                ),
+                new SignalTextEffect(
+                  'THE MISERABLE BASTARD TAPES',
+                  new DynamicNumber(200),
+                  new DynamicNumber(200)
+                ),
+                new SignalTextEffect(
+                  'CHAPTER 1 : SUCKER PUNCH',
+                  new DynamicNumber(200),
+                  new DynamicNumber(250)
+                ),
+              ]
+            ),
+            new TVStaticEffect(
+              { mode: 0, speed: new DynamicNumber(25), opacity: new DynamicNumber(1) },
+              BlendMode.MULTIPLICATIVE
+            ),
+            0.0,
+            1.0,
+            1.0,
+            3.5
+          ),
+          AnimateModifierEffect.EffectType.FADE_OUT,
+          2.8,
+          0.8
+        ),
+
+        new AnimateModifierEffect(
+          new VideoOverlayEffect(
+            document.getElementById('tv-turn-off'),
+            null,
+            null,
+            new Proc((effectStateData) => effectStateData.timeSeconds - 0)
+          ),
+          AnimateModifierEffect.EffectType.STATIC_OVERLAY,
+          (3.48 * 60),
+          5
+        ),
+
+        new AnimateModifierEffect(
+          new TVBackgroundEffect({
+            zoom: new DynamicTuple(
+              new Interpolation(1.0, 1.2, new Proc((effectStateData) => {
+                return Math.min(1, effectStateData.timeSeconds / 2.0) // 1st 2 seconds
+              }))
+            ),
+            offset: new DynamicTuple(
+              new Interpolation(0, -30, new Proc((effectStateData) => {
+                return Math.min(1, effectStateData.timeSeconds / 2.0) // 1st 2 seconds
+              })),
+              0
+            )
+          }),
+          AnimateModifierEffect.EffectType.FADE_OUT,
+          (3.52 * 60),
+          (4.01 * 60) - (3.52 * 60) // yea.. nasty hardcoding based on time and length of video.
+        )
+      ]
+
+      $(function () {
+        $('#load-saved-btn').click(() => {
+          lyricsBuilder.loadFromSave()
+        })
+
+        $('#generate-lyrics-btn').click(() => {
+          lyricsBuilder.autoGeneratePlacements()
+        })
+
+        $('#render-video-btn').click(() => {
+          lyricsBuilder.renderVideo(EXAMPLE_VIDEO_EFFECTS)
+        })
+      })
+    </script>
 
   </body>
 </html>

@@ -1,5 +1,6 @@
 class TVStaticEffect extends VideoRenderEffect {
   static SAMPLES = 10
+  static BLENDING_FRAMES = 1
 
   constructor(options = {}, blendMode = BlendMode.ADDITIVE, order = VideoRenderEffect.EffectOrder.POST) {
     super(blendMode, order)
@@ -36,11 +37,7 @@ class TVStaticEffect extends VideoRenderEffect {
       intensity.push(value)
 		}
 
-		// for (let i = 0; i < (w * h); i++) {
-		// 	const k = i * 4
-		// 	imageData.data[k] = imageData.data[k + 1] = imageData.data[k + 2] = 0
-		// 	imageData.data[k + 3] = 255
-    // }
+		const imageData = context.createImageData(w, h)
 
 		for (let i = 0; i < (w * h); i++) {
 			const k = i * 4
@@ -48,11 +45,11 @@ class TVStaticEffect extends VideoRenderEffect {
   
 			// Optional: add an intensity curve to try to simulate scan lines
 			color += intensity[Math.floor(i / w)]
-			this.imageData.data[k] = this.imageData.data[k + 1] = this.imageData.data[k + 2] = color
-			this.imageData.data[k + 3] = Math.round(255 * trans)
+			imageData.data[k] = imageData.data[k + 1] = imageData.data[k + 2] = color
+			imageData.data[k + 3] = Math.round(255 * trans)
     }
 
-		return this.imageData
+		return imageData
   }
 
   _createSamples(canvas, context, width, height) {
@@ -60,46 +57,66 @@ class TVStaticEffect extends VideoRenderEffect {
 
     this.samples = []
 
+    let rawSamples = []
+
     for (let i = 0; i < TVStaticEffect.SAMPLES; i++) {
-      this.samples.push(this._randomSample(context, width, height))
+      rawSamples.push(this._randomSample(context, width, height))
     }
+
+    rawSamples.forEach((sample, index) => {
+      this.samples.push(sample)
+
+      if (index == 0) {
+        return
+      }
+
+      let prevSample = this.samples[this.samples.length - 1],
+          blendSample = context.createImageData(width, height)
+
+      for (let i = 1; i <= TVStaticEffect.BLENDING_FRAMES; i++) {
+        const blend = i / (TVStaticEffect.BLENDING_FRAMES + 1)
+
+        for (let x = 0; x < sample.width; x++) {
+          for (let y = 0; y < sample.height; y++) {
+
+            let idx = (x + y * sample.width) * 4
+
+            blendSample.data[idx] = lerp(prevSample.data[idx], sample.data[idx], blend)
+            blendSample.data[idx + 1] = lerp(prevSample.data[idx + 1], sample.data[idx + 1], blend)
+            blendSample.data[idx + 2] = lerp(prevSample.data[idx + 2], sample.data[idx + 2], blend)
+            blendSample.data[idx + 3] = lerp(prevSample.data[idx + 3], sample.data[idx + 3], blend)
+          }
+        }
+      }
+
+      this.samples.push(blendSample)
+    })
   }
 
   renderFrame(canvas, context, effectStateData) {
-    /*if (this.scanSize == 0) {
-      this._createSamples(canvas, context, canvas.width, canvas.height)
-    }
-
-    let sampleData = this.samples[Math.floor(this.sampleIndex)]
-
-    this.sampleIndex += this.speed.value(effectStateData) / FRAMES_PER_SECOND
-
-    if (this.sampleIndex >= this.samples.length) {
-      this.sampleIndex = 0
-    }
-*/
-
-    if (this.imageData == null) {
-      this.imageData = context.createImageData(canvas.width, canvas.height)
-
-      if (this.mode == 0) {
-        this._createSamples(canvas, context, canvas.width, canvas.height)
-      }
-    }
-
-    let imageData = this.imageData
+    let imageData
 
     if (this.mode == 0) {
+      if (_.isEmpty(this.samples)) {
+        this._createSamples(canvas, context, canvas.width, canvas.height)
+      }
+
       imageData = this.samples[Math.floor(this.sampleIndex)]
 
       this.sampleIndex += this.speed.value(effectStateData) / FRAMES_PER_SECOND
-
+      
       if (this.sampleIndex >= this.samples.length) {
         this.sampleIndex = 0
       }
     } else if (this.mode == 1) {
-      for (var i = 0; i < context.canvas.width * context.canvas.height * 4; i++) {
-        this.imageData.data[i] = ((255 * Math.random()) | 0) << 24;
+      if (this.imageData == null) {
+        this.imageData = context.createImageData(canvas.width, canvas.height)
+      }
+
+      imageData = this.imageData
+
+      for (var i = 0; i < canvas.width * canvas.height * 4; i++) {
+        imageData.data[i] = ((255 * Math.random()) | 0) << 24;
       }
     }
 

@@ -1,24 +1,39 @@
 class MergeModifierEffect extends VideoRenderEffect {
   /**
    * 
-   * @param {VideoRenderEffect} effect0
-   * @param {VideoRenderEffect} effect1
+   * @param {VideoRenderEffect[]} effects
+   * @param {BlendMode} blendMode
    * @param {VideoRenderEffect.EffectOrder} order 
    */
-  constructor(effect0, effect1, order = VideoRenderEffect.EffectOrder.POST) {
-    super(BlendMode.NORMAL, order)
+  constructor(effects, blendMode = BlendMode.NORMAL, order = VideoRenderEffect.EffectOrder.POST) {
+    super(blendMode, order)
 
-    this.effect0 = effect0
-    this.effect1 = effect1
-    this.imageData = null
+    this.effects = effects
   }
 
   renderFrame(canvas, context, effectStateData) {
-    let effectResult0 = this.effect0.render(canvas, context, effectStateData).clone()
-    let effectResult1 = this.effect1.render(canvas, context, effectStateData).clone()
+    if (this.effects.length == 0) {
+      return null
+    }
 
-    effectResult0.applyToImageData(effectResult1.resultData, canvas)
+    if (this.effects.length == 1) {
+      return this.effects[0].render(canvas, context, effectStateData)
+    }
 
-    return effectResult1
+    let prevResult = this.effects[0].render(canvas, context, effectStateData)
+
+    for (let i = 1; i < this.effects.length; i++) {
+      let nextResult = this.effects[i].render(canvas, context, effectStateData).clone()
+
+      if (prevResult == null) {
+        prevResult = nextResult
+      } else {
+        nextResult.applyToImageData(prevResult.resultData, canvas, {opacity: 1})
+      }
+    }
+
+    prevResult.blendMode = this.blendMode
+
+    return prevResult
   }
 }

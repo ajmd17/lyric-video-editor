@@ -35,7 +35,7 @@ app
 .use('/images', express.static(path.join(__dirname, 'web', 'images')))
 .use('/js', express.static(path.join(__dirname, 'web', 'js')))
 .use('/js/lib', express.static(path.join(__dirname, 'web', 'js', 'lib')))
-.use('/fonts', express.static(path.join(__dirname, 'web', 'fonts')))
+.use('/font', express.static(path.join(__dirname, 'web', 'font')))
 .use('/example_data', express.static(path.join(__dirname, 'web', 'example_data')))
 .get('/', (req, res, next) => {
   res.sendFile(path.join(__dirname, 'web', 'index.html'))

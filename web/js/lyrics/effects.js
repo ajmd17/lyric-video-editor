@@ -12,7 +12,10 @@ const BlendMode = {
   NO_OP: -1,
   NORMAL: 0,
   ADDITIVE: 1,
-  SUBTRACTIVE: 2
+  SUBTRACTIVE: 2,
+  MULTIPLICATIVE: 3,
+  NO_TRANSPARENCY: 4, // no alpha channel; assigned directly to rhs (rgb multiplied by alpha)
+  NORMAL_MUL_ALPHA: 5
 }
 
 const blendCombineFunc = {
@@ -23,7 +26,7 @@ const blendCombineFunc = {
     }
   },
   [BlendMode.NORMAL_MUL_ALPHA]: (lhs, rhs, lhsIndex, rhsIndex) => {
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
       lhs[i + lhsIndex] = lerp(lhs[i + lhsIndex], rhs[i + rhsIndex], rhs[3 + rhsIndex] / 255)
     }
   },
@@ -36,6 +39,18 @@ const blendCombineFunc = {
     for (let i = 0; i < 4; i++) {
       lhs[i + lhsIndex] -= rhs[i + rhsIndex]
     }
+  },
+  [BlendMode.MULTIPLICATIVE]: (lhs, rhs, lhsIndex, rhsIndex) => {
+    for (let i = 0; i < 4; i++) {
+      lhs[i + lhsIndex] *= rhs[i + rhsIndex] / 255
+    }
+  },
+  [BlendMode.NO_TRANSPARENCY]: (lhs, rhs, lhsIndex, rhsIndex) => {
+    for (let i = 0; i < 3; i++) {
+      lhs[i + lhsIndex] = rhs[i + rhsIndex] * (rhs[rhsIndex + 3] / 255)
+    }
+
+    lhs[lhsIndex + 3] = 255
   }
 }
 
@@ -70,7 +85,7 @@ class EffectResult {
 
         blendCombineFunc[this.blendMode](imageData.data, this.resultData.data, outputIndex, thisIndex)
 
-        if (opacity < 1.0) {
+        if (opacity < 1.0 && this.blendMode != BlendMode.NO_TRANSPARENCY) {
           imageData.data[outputIndex]     = lerp(prevValues[0], imageData.data[outputIndex], opacity)
           imageData.data[outputIndex + 1] = lerp(prevValues[1], imageData.data[outputIndex + 1], opacity)
           imageData.data[outputIndex + 2] = lerp(prevValues[2], imageData.data[outputIndex + 2], opacity)

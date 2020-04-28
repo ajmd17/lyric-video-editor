@@ -33,24 +33,6 @@ class LyricsBuilder {
     }
   }
 
-  // createAudioSourceFromVideo() {
-  //   const videoElement = document.getElementById('main-video'),
-  //     audioElement = document.createElement('audio'),
-  //     audioContext = new AudioContext()
-  
-  //   audioElement.setAttribute('src', videoElement.getAttribute('src'))
-  //   audioElement.setAttribute('controls', 'true')
-  
-  //   this._audioContainer.innerHTML = ''
-  //   this._audioContainer.appendChild(audioElement)
-    
-  //   let sourceNode = audioContext.createMediaElementSource(audioElement)
-
-  //   this._currentAudioManipulator = new AudioManipulator(audioContext, sourceNode)
-
-  //   return sourceNode
-  // }
-
   skipVideoToTime(timeSeconds) {
     this._audioElement[0].currentTime = Math.floor(timeSeconds)
   }
@@ -298,7 +280,7 @@ class LyricsBuilder {
     }
   }
   
-  build() {
+  autoGeneratePlacements() {
     this._initialize()
     this._buildDefaultConfiguration()
   }
@@ -360,44 +342,8 @@ class LyricsBuilder {
     }
   }
 
-  renderVideo() {
+  renderVideo(videoEffects = []) {
     this.rendering = true
-
-    // hardcoded for now
-    const videoEffects = [
-      new TVStaticEffect({ mode: 1, speed: new DynamicNumber(20), opacity: new DynamicNumber(0.15) }),
-      new BouncyBallEffect(),
-      new AnimateModifierEffect(
-        new BlendDeltaModifierEffect(
-          new NoSignalEffect(),
-          new TVStaticEffect(
-            { mode: 0, speed: new DynamicNumber(30), opacity: new DynamicNumber(1) },
-            BlendMode.NORMAL
-          ),
-          0.4,
-          1.0,
-          
-          1.6,
-          3.0
-        ),
-        AnimateModifierEffect.EffectType.FADE_OUT,
-        3.2,
-        0.8
-      ),
-      new TVBackgroundEffect({
-        zoom: new DynamicTuple(
-          new Interpolation(1.0, 1.2, new Proc((effectStateData) => {
-            return Math.min(1, effectStateData.timeSeconds / 2.0) // 1st 2 seconds
-          }))
-        ),
-        offset: new DynamicTuple(
-          new Interpolation(0, -30, new Proc((effectStateData) => {
-            return Math.min(1, effectStateData.timeSeconds / 2.0) // 1st 2 seconds
-          })),
-          0
-        )
-      })
-    ]
 
     this._renderVideoStatusLabel.html('Setting up ...')
 
@@ -479,7 +425,7 @@ class LyricsBuilder {
         const result = videoEffect.render(self._renderingCanvas, ctx, stateData)
 
         if (result === null) {
-          // do data returned, do not use
+          // no data returned, do not use
           return
         }
 
@@ -539,6 +485,9 @@ class LyricsBuilder {
         waitTicksRemaining = 5
 
     waitInterval = setInterval(() => {
+      ctx.font = '32px "Postface"'
+      ctx.fillText('Waiting...', 0, 0)
+
       this._renderVideoStatusLabel.html(`Allowing some buffering time to pre-load assets (${waitTicksRemaining}s)`)
 
       waitTicksRemaining--
@@ -674,12 +623,6 @@ class LyricsBuilder {
 
         if (stateData.renderDashes && index < group.length - 1) {
           part += '-'
-        }
-
-        if (percentage < 1.0 && percentage > 0.0) {
-          ctx.fillStyle = '#eee'
-        } else {
-          ctx.fillStyle = '#fff'
         }
 
         ctx.textBaseline = 'middle'
@@ -966,6 +909,9 @@ class LyricsBuilder {
 
       this._renderVideoStatusLabel.html('Client idle')
     }
+
+    // clear temporary elements used for rendering process (sub canvas, video elements, etc)
+    $('#render-buffer-items').html('')
 
     this._rendering = value
   }

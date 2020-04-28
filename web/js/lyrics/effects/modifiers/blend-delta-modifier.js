@@ -7,10 +7,11 @@ class BlendDeltaModifierEffect extends VideoRenderEffect {
    * @param {number} endBlend
    * @param {number} startTime
    * @param {number} duration
+   * @param {BlendMode} blendMode
    * @param {VideoRenderEffect.EffectOrder} order 
    */
-  constructor(effect0, effect1, startBlend, endBlend, startTime, duration, order = VideoRenderEffect.EffectOrder.POST) {
-    super(BlendMode.NORMAL, order)
+  constructor(effect0, effect1, startBlend, endBlend, startTime, duration, blendMode = BlendMode.NORMAL, order = VideoRenderEffect.EffectOrder.POST) {
+    super(blendMode, order)
 
     this.effect0 = effect0
     this.effect1 = effect1
@@ -37,11 +38,16 @@ class BlendDeltaModifierEffect extends VideoRenderEffect {
     //   return targetEffectResult
     // }
 
-    //return animEffectResult
     if (animEffectResult != null) {
       animEffectResult.applyToImageData(targetEffectResult.resultData, canvas)
     }
 
-    return targetEffectResult
+    return new EffectResult(
+      this.blendMode,
+      targetEffectResult.resultData,
+      targetEffectResult.offset,
+      targetEffectResult.size,
+      { opacity: targetEffectResult.options.opacity }
+    )
   }
 }

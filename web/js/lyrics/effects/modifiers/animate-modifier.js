@@ -1,7 +1,8 @@
 class AnimateModifierEffect extends VideoRenderEffect {
   static EffectType = {
     FADE_OUT: 0,
-    FADE_IN: 1
+    FADE_IN: 1,
+    STATIC_OVERLAY: 2
   }
 
   /**
@@ -10,10 +11,11 @@ class AnimateModifierEffect extends VideoRenderEffect {
    * @param {AnimateModifierEffect.EffectType} effectType
    * @param {number} timeStart 
    * @param {number} duration 
+   * @param {BlendMode} blendMode 
    * @param {VideoRenderEffect.EffectOrder} order 
    */
-  constructor(effect, effectType, timeStart, duration, order = VideoRenderEffect.EffectOrder.POST) {
-    super(BlendMode.NORMAL, order)
+  constructor(effect, effectType, timeStart, duration, blendMode = effect.blendMode, order = VideoRenderEffect.EffectOrder.POST) {
+    super(blendMode, order)
 
     this.effect = effect
     this.effectType = effectType
@@ -41,7 +43,7 @@ class AnimateModifierEffect extends VideoRenderEffect {
     }
 
     return new EffectResult(
-      effectResult.blendMode,
+      this.blendMode,
       effectResult.resultData,
       effectResult.offset,
       effectResult.size,
@@ -68,12 +70,24 @@ class AnimateModifierEffect extends VideoRenderEffect {
     }
 
     return new EffectResult(
-      effectResult.blendMode,
+      this.blendMode,
       effectResult.resultData,
       effectResult.offset,
       effectResult.size,
       { opacity: effectResult.options.opacity * opacity }
     )
+  }
+
+  _staticOverlay(canvas, context, effectStateData) {
+    if (effectStateData.timeSeconds < this.timeStart) {
+      return null
+    }
+
+    if (effectStateData.timeSeconds > this.timeStart + this.duration) {
+      return null
+    }
+
+    return this.effect.render(canvas, context, effectStateData)
   }
 
   renderFrame(canvas, context, effectStateData) {
@@ -82,6 +96,8 @@ class AnimateModifierEffect extends VideoRenderEffect {
         return this._fadeOut(canvas, context, effectStateData)
       case AnimateModifierEffect.EffectType.FADE_IN:
         return this._fadeIn(canvas, context, effectStateData)
+      case AnimateModifierEffect.EffectType.STATIC_OVERLAY:
+        return this._staticOverlay(canvas, context, effectStateData)
     }
 
     return null

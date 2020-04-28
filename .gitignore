@@ -3,3 +3,4 @@ data/*
 *.DS_Store
 *.mp4
 web/example_data/sucker_punch.wav
+web/example_data/sucker_punch.png

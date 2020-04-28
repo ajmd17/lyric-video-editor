@@ -5,7 +5,7 @@ class TVBackgroundEffect extends VideoRenderEffect {
   static HOLE_Y = 150
 
   constructor(options = {}) {
-    super(BlendMode.NORMAL, VideoRenderEffect.EffectOrder.POST)
+    super(BlendMode.NO_TRANSPARENCY, VideoRenderEffect.EffectOrder.POST)
 
     this.imageData = null
 
@@ -16,31 +16,41 @@ class TVBackgroundEffect extends VideoRenderEffect {
     this.img.src = 'images/tv_gr_vignette4.png?time=' + Date.now()
     this.time = 0
 
-    this._subCanvas = document.getElementById('sub-canvas')
-    this._subCanvas.width = TVBackgroundEffect.HOLE_WIDTH
-    this._subCanvas.height = TVBackgroundEffect.HOLE_HEIGHT
-    this._subContext = this._subCanvas.getContext('2d')
+    this._holeSubCanvas = document.createElement('canvas')
+    document.getElementById('render-buffer-elements').appendChild(this._holeSubCanvas)
+    this._holeSubCanvas.width = TVBackgroundEffect.HOLE_WIDTH
+    this._holeSubCanvas.height = TVBackgroundEffect.HOLE_HEIGHT
+    this._holeSubContext = this._holeSubCanvas.getContext('2d')
+
+    this._tvSubCanvas = document.createElement('canvas')
+    document.getElementById('render-buffer-elements').appendChild(this._tvSubCanvas)
+    this._tvSubCanvas.width = TVBackgroundEffect.HOLE_WIDTH
+    this._tvSubCanvas.height = TVBackgroundEffect.HOLE_HEIGHT
+    this._tvSubContext = this._tvSubCanvas.getContext('2d')
   }
 
   _drawImageInHole(canvas, context) {
     // draw original image to fit in hole
 
-    const scalingRatio = canvas.width / this._subCanvas.width
+    const scalingRatio = canvas.width / this._holeSubCanvas.width
 
     const ar = canvas.width / canvas.height
 
-    this._subCanvas.width =  ar * TVBackgroundEffect.HOLE_HEIGHT
-    this._subCanvas.height = TVBackgroundEffect.HOLE_HEIGHT
+    this._holeSubCanvas.width =  ar * TVBackgroundEffect.HOLE_HEIGHT
+    this._holeSubCanvas.height = TVBackgroundEffect.HOLE_HEIGHT
 
     // draw to subcanvas
-    this._subContext.clearRect(0, 0, this._subCanvas.width, this._subCanvas.height)
-    this._subContext.drawImage(canvas, 0, 0, this._subCanvas.width, this._subCanvas.height)
+    this._holeSubContext.clearRect(0, 0, this._holeSubCanvas.width, this._holeSubCanvas.height)
+    this._holeSubContext.drawImage(canvas, 0, 0, this._holeSubCanvas.width, this._holeSubCanvas.height)
   }
 
   renderFrame(canvas, context, effectStateData) {
+    this._tvSubCanvas.width = canvas.width
+    this._tvSubCanvas.height = canvas.height
+
     this._drawImageInHole(canvas, context)
 
-    context.clearRect(0, 0, canvas.width, canvas.height)
+    this._tvSubContext.clearRect(0, 0, canvas.width, canvas.height)
 
     if (canvas.width == 0) {
       return null
@@ -61,12 +71,12 @@ class TVBackgroundEffect extends VideoRenderEffect {
     //subImageOffsetX = 0.5 * ((this.time % 3) - 1)
     subImageOffsetY = 0.5 * ((this.time % 3) - 1)
 
-    const wDiv = this._subCanvas.width / TVBackgroundEffect.HOLE_WIDTH
+    const wDiv = this._holeSubCanvas.width / TVBackgroundEffect.HOLE_WIDTH
 
     const ratioX = (width) / this.img.naturalWidth,
           ratioY = (height) / this.img.naturalHeight,
-          subImageRatioX = this._subCanvas.width / this.img.naturalWidth,
-          subImageRatioY = this._subCanvas.height / this.img.naturalHeight,
+          subImageRatioX = this._holeSubCanvas.width / this.img.naturalWidth,
+          subImageRatioY = this._holeSubCanvas.height / this.img.naturalHeight,
           subImageWidthScaled = subImageRatioX * width,
           subImageHeightScaled = subImageRatioY * height
     
@@ -75,11 +85,11 @@ class TVBackgroundEffect extends VideoRenderEffect {
           holeX = ((TVBackgroundEffect.HOLE_X / wDiv) * ratioX) + tvX,
           holeY = ((TVBackgroundEffect.HOLE_Y) * ratioY) + tvY
 
-    context.drawImage(this._subCanvas, holeX + subImageOffsetX, holeY + subImageOffsetX, holeWidth, holeHeight)
+    this._tvSubContext.drawImage(this._holeSubCanvas, holeX + subImageOffsetX, holeY + subImageOffsetX, holeWidth, holeHeight)
 
-    context.filter = 'saturation(70%)'// brightness(129%) contrast(82%)'
+    this._tvSubContext.filter = 'saturation(70%)'
 
-    context.drawImage(
+    this._tvSubContext.drawImage(
       this.img,
       0, 0,
       this.img.naturalWidth, this.img.naturalHeight,
@@ -87,10 +97,14 @@ class TVBackgroundEffect extends VideoRenderEffect {
       width, height
     )
 
-    context.filter = 'saturation(100%)'// brightness(100%) contrast(100%)'
+    this._tvSubContext.filter = 'saturation(100%)'
     
     this.time++
 
-    return null
+    return {
+      position: [0, 0],
+      size: [canvas.width, canvas.height],
+      imageData: this._tvSubContext.getImageData(0, 0, canvas.width, canvas.height)
+    }
   }
 }
