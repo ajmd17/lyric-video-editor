@@ -198,8 +198,45 @@ class LyricsBuilder {
     return $lineElement
   }
 
+  _createSyllableElement(syllable, line, index) {
+    const $syllable = $(`
+      <span class="syllable" data-syllable-index="${index}">
+        <div class="positive">
+          <span>${syllable.syllable}</span>
+        </div>
+        <div class="negative">
+          <span>${syllable.syllable}</span>
+        </div>
+      </span>
+    `)
+
+    $syllable.draggable({
+      axis: 'x',
+      containment: 'parent'
+    })
+
+    $syllable.on('drag', (event) => {
+      const percentage = $syllable.position().left / this._videoPreviewContent.width(),
+            offset = line.duration * percentage
+
+      syllable.offset = offset
+
+      line.updateSyllableDurations()
+
+      this.storeState()
+    })
+
+    return $syllable
+  }
+
   update(timeSeconds, options = { force: false }) {
     window.wavesurfer.seekTo(timeSeconds / this._totalDuration)
+
+    if (!this._markersContainer.attr('scrolled')) {
+      this._markersContainer[0].scrollLeft = timeSeconds * PIXELS_PER_SEC
+      $('#wavesurfer > wave')[0].scrolLeft = timeSeconds * PIXELS_PER_SEC
+    }
+
     const newStanza = this._currentLyricsObject.stanzaAtTime(timeSeconds)
 
     this._currentLyricsObject.stanzas.forEach((stanza, stanzaIndex) => {
@@ -231,8 +268,6 @@ class LyricsBuilder {
     }
 
     const currentLineIndex = this._currentStanza.lineIndexAtTime(timeSeconds)
-    //const linesSorted = _.map(linesSortedIndices, ({ index }) => this._currentStanza.lines[index])
-
     const newLine = this._currentStanza.lines[currentLineIndex]
 
     if (newLine != this._currentLine || options.force) {
@@ -243,34 +278,7 @@ class LyricsBuilder {
 
       if (newLine && !_.isEmpty(newLine.syllables)) {
         newLine.syllables.forEach((syllable, syllableIndex) => {
-          const $syllable = $(`
-            <span class="syllable" data-syllable-index="${syllableIndex}">
-              <div class="positive">
-                <span>${syllable.syllable}</span>
-              </div>
-              <div class="negative">
-                <span>${syllable.syllable}</span>
-              </div>
-            </span>
-          `)
-
-          $syllable.draggable({
-            axis: 'x',
-            containment: 'parent'
-          })
-
-          $syllable.on('drag', (event) => {
-            const percentage = $syllable.position().left / this._videoPreviewContent.width(),
-              offset = newLine.duration * percentage
-            console.log('offset: ', offset)
-            syllable.offset = offset
-
-            newLine.updateSyllableDurations()
-
-            this.storeState()
-          })
-
-          $line.append($syllable)
+          $line.append(this._createSyllableElement(syllable, newLine, syllableIndex))
         })
       }
       
@@ -357,9 +365,25 @@ class LyricsBuilder {
 
     // hardcoded for now
     const videoEffects = [
-      new TVStaticEffect({ speed: new DynamicNumber(20), opacity: new DynamicNumber(0.6) }),
+      new TVStaticEffect({ mode: 1, speed: new DynamicNumber(20), opacity: new DynamicNumber(0.15) }),
       new BouncyBallEffect(),
-      new AnimateModifierEffect(new BlendDeltaModifierEffect(new NoSignalEffect(), new TVStaticEffect({ speed: new DynamicNumber(30) }, BlendMode.NORMAL), 0.2, 1.0, 0, 4.0), AnimateModifierEffect.EffectType.FADE_OUT, 3.2, 0.8),
+      new AnimateModifierEffect(
+        new BlendDeltaModifierEffect(
+          new NoSignalEffect(),
+          new TVStaticEffect(
+            { mode: 0, speed: new DynamicNumber(30), opacity: new DynamicNumber(1) },
+            BlendMode.NORMAL
+          ),
+          0.4,
+          1.0,
+          
+          1.6,
+          3.0
+        ),
+        AnimateModifierEffect.EffectType.FADE_OUT,
+        3.2,
+        0.8
+      ),
       new TVBackgroundEffect({
         zoom: new DynamicTuple(
           new Interpolation(1.0, 1.2, new Proc((effectStateData) => {
@@ -394,27 +418,18 @@ class LyricsBuilder {
     )
 
     let self = this,
-      currentFrame = 1030,
+      currentFrame = 0,
       frameCount = currentFrame + 1,
-      stateData = {
-        renderDashes: false,
-        timeSeconds: 0,
+      stateData = new RenderState({
         totalDuration: this._totalDuration,
         lyrics: this._currentLyricsObject,
-        currentBackgroundImage: null,
-        currentStanza: null,
-        currentLineIndex: 0,
-        currentLine: null,
-        syllablePercentages: [],
-        syllablesGrouped: [],
-        lyricSection: {
-          syllablePositions: {}, // set during render of frame -- maps syllable to pixel position
-          x: 0,
-          y: this._renderingCanvas.height - 100 - 30,
-          width: this._renderingCanvas.width,
-          height: 100
-        }
-      }
+        lyricSection: new LyricSectionState(
+          0,
+          this._renderingCanvas.height - 100 - 30,
+          this._renderingCanvas.width,
+          100
+         )
+      })
 
       const updateStateData = () => {
         const videoPercentage = currentFrame / totalFrames
@@ -446,7 +461,7 @@ class LyricsBuilder {
           const { nextLine, nextLineIndex, nextStanza } = nextLineObject
 
           stateData.nextLine = nextLine
-          stateData.newStanzaIndex = nextLineIndex
+          stateData.nextLineIndex = nextLineIndex
 
           stateData.nextLineSyllablePercentages = stateData.nextLine.syllablePercentagesAtTime(nextStanza.getAbsoluteTimeOfLine(stateData.nextLine), nextStanza.offset)
           stateData.nextLineSyllablesGrouped = self._groupSyllables(stateData.nextLineSyllablePercentages)
@@ -509,15 +524,6 @@ class LyricsBuilder {
 
           cvg.addFrame(self._renderingCanvas)
 
-          // const buffer = Math.floor(60 / FRAMES_PER_SECOND)
-
-          // // re-add frame to fill 60 fps
-          // if (buffer > 1) {
-          //   for (let i = 0; i < buffer - 1; i++) {
-          //     cvg.addFrame(self._renderingCanvas)
-          //   }
-          // }
-
           currentFrame = frameCount
 
           requestAnimationFrame(renderTick)
@@ -550,6 +556,10 @@ class LyricsBuilder {
   _calcTextWidth(canvas, context, syllablesGrouped, stateData) {
     let totalTextWidth = 0
 
+    if (stateData.currentStanza.type in this._options.lineDecorators) {
+      totalTextWidth += context.measureText(this._options.lineDecorators[stateData.currentStanza.type] + ' ').width
+    }
+
     syllablesGrouped.forEach((group, groupIndex) => {
       group.forEach(([syllable, percentage], index) => {
         let part = syllable.syllable
@@ -566,6 +576,10 @@ class LyricsBuilder {
       }
     })
 
+    if (stateData.currentStanza.type in this._options.lineDecorators) {
+      totalTextWidth += context.measureText(' ' + this._options.lineDecorators[stateData.currentStanza.type]).width
+    }
+
     return totalTextWidth
   }
 
@@ -574,6 +588,10 @@ class LyricsBuilder {
         totalTextWidth = this._calcTextWidth(canvas, context, syllablesGrouped, stateData)
 
     let textPosition = (canvas.width / 2) - (totalTextWidth / 2)
+
+    if (stateData.currentStanza.type in this._options.lineDecorators) {
+      totalTextWidth += context.measureText(this._options.lineDecorators[stateData.currentStanza.type] + ' ').width
+    }
 
     syllablesGrouped.forEach((group, groupIndex) => {
       group.forEach(([syllable, percentage], index) => {
@@ -586,7 +604,7 @@ class LyricsBuilder {
         let syllableX = textPosition + textOffset,
             syllableY =  stateData.lyricSection.y + (stateData.lyricSection.height / 2)
 
-        stateData.lyricSection.syllablePositions[`${prefix}__${groupIndex}_${index}`] = [syllableX, syllableY]
+        stateData.lyricSection.setSyllablePosition(prefix, groupIndex, index, syllableX, syllableY)
 
         textOffset += context.measureText(part).width
       })
@@ -595,6 +613,10 @@ class LyricsBuilder {
         textOffset += context.measureText(' ').width
       }
     })
+
+    if (stateData.currentStanza.type in this._options.lineDecorators) {
+      totalTextWidth += context.measureText(' ' + this._options.lineDecorators[stateData.currentStanza.type]).width
+    }
 
     return {
       textOffset,
@@ -611,40 +633,18 @@ class LyricsBuilder {
       )
     }
 
+    if (stateData.currentStanza == null) {
+      return
+    }
+
     let textBackgroundPadding = 5,
         textHeight = 32
 
     ctx.font = '32px "Postface"'
 
-    /*if (stateData.currentStanza.type in this._options.lineDecorators) {
-      totalTextWidth += ctx.measureText(this._options.lineDecorators[stateData.currentStanza.type] + ' ').width
-    }
-    
-    // calculate total text width 
-    stateData.syllablesGrouped.forEach((group, groupIndex) => {
-      group.forEach(([syllable], index) => {
-        let part = syllable.syllable
-
-        if (renderDashes && index < group.length - 1) {
-          part += '-'
-        }
-
-        totalTextWidth += ctx.measureText(part).width
-      })
-
-      if (groupIndex != stateData.syllablesGrouped.length - 1) {
-        totalTextWidth += ctx.measureText(' ').width
-      }
-    })
-
-    if (stateData.currentStanza.type in this._options.lineDecorators) {
-      totalTextWidth += ctx.measureText(' ' + this._options.lineDecorators[stateData.currentStanza.type]).width
-    }*/
-
     let { totalTextWidth, textPosition } = this._setTextPositions(this._renderingCanvas, ctx, stateData.syllablesGrouped, stateData, 'current')
     this._setTextPositions(this._renderingCanvas, ctx, stateData.nextLineSyllablesGrouped, stateData, 'next')
 
-    //textPosition = (this._renderingCanvas.width / 2) - (totalTextWidth / 2)
     stateData.lyricSection.x = textPosition - textBackgroundPadding
     stateData.lyricSection.width = totalTextWidth + (textBackgroundPadding * 2)
     stateData.lyricSection.height = textHeight + (textBackgroundPadding * 2)
@@ -659,16 +659,11 @@ class LyricsBuilder {
 
     ctx.fillStyle = '#fff'
 
-    // if (stateData.currentStanza.type in this._options.lineDecorators) {
-    //   ctx.fillText(this._options.lineDecorators[stateData.currentStanza.type] + ' ', textPosition, stateData.lyricSection.y + (stateData.lyricSection.height / 2))
-    //   textOffset += ctx.measureText(this._options.lineDecorators[stateData.currentStanza.type] + ' ').width
-    // }
-
     let positionsKey = 'current',
         syllablesGrouped = stateData.syllablesGrouped
 
+    // transition to next line
     if (stateData.syllablePercentages.length != 0 && stateData.syllablePercentages[stateData.syllablePercentages.length - 1][1] >= 0.5) {
-      // render next
       syllablesGrouped = stateData.nextLineSyllablesGrouped
       positionsKey = 'next'
     }
@@ -686,20 +681,16 @@ class LyricsBuilder {
         } else {
           ctx.fillStyle = '#fff'
         }
-        ctx.textBaseline = "middle"
 
-        let [syllableX, syllableY] = stateData.lyricSection.syllablePositions[`${positionsKey}__${groupIndex}_${index}`]
+        ctx.textBaseline = 'middle'
+
+        let [syllableX, syllableY] = stateData.lyricSection.getSyllablePosition(positionsKey, groupIndex, index)
 
         ctx.fillText(part, syllableX, syllableY)
       })
     })
 
     ctx.fillStyle = '#fff'
-
-    // if (stateData.currentStanza.type in this._options.lineDecorators) {
-    //   ctx.fillText(' ' + this._options.lineDecorators[stateData.currentStanza.type] + ' ', textPosition + textOffset, stateData.lyricSection.y + (stateData.lyricSection.height / 2))
-    //   textOffset += ctx.measureText(' ' + this._options.lineDecorators[stateData.currentStanza.type]).width
-    // }
   }
 
   _groupSyllables(frameSyllablePercentages) {
@@ -938,7 +929,8 @@ class LyricsBuilder {
     window.wavesurfer.on('scroll', (event) => {
       let scrollRatio = event.target.scrollLeft / $(event.target).width()
 
-      $('#markers-container')[0].scrollLeft =$('#markers-container').width() * scrollRatio //(PIXELS_PER_SEC * this._totalDuration) * scrollRatio
+      $('#markers-container').attr('scrolled', 'scrolled')
+      $('#markers-container')[0].scrollLeft = $('#markers-container').width() * scrollRatio //(PIXELS_PER_SEC * this._totalDuration) * scrollRatio
 
       // $('#track-elements')[0].scrollLeft = $('#track-elements').width() * scrollRatio
       // $('#stanza-lines-overlay')[0].scrollLeft = $('#stanza-lines-overlay').width() * scrollRatio
@@ -976,6 +968,10 @@ class LyricsBuilder {
     }
 
     this._rendering = value
+  }
+
+  get _markersContainer() {
+    return $('#markers-container')
   }
 
   get _videoBackgroundImage() {
@@ -1068,7 +1064,10 @@ $(function () {
     if (!lyricsBuilder.rendering) {
       lyricsBuilder.update(lyricsBuilder._currentTime)
     }
-    // video.setAttribute('controls', 'controls')
+  })
+
+  lyricsBuilder._audioElement.on('play', () => {
+    lyricsBuilder._markersContainer.removeAttr('scrolled')
   })
 
 })

@@ -14,6 +14,7 @@ class TVBackgroundEffect extends VideoRenderEffect {
 
     this.img = document.createElement('img')
     this.img.src = 'images/tv_gr_vignette4.png?time=' + Date.now()
+    this.time = 0
 
     this._subCanvas = document.getElementById('sub-canvas')
     this._subCanvas.width = TVBackgroundEffect.HOLE_WIDTH
@@ -53,7 +54,12 @@ class TVBackgroundEffect extends VideoRenderEffect {
     let width = (this.img.width / scalingRatio) * zoomX,
         height = canvas.height * zoomY,
         tvX = (canvas.width / 2) - (width / 2) + offsetX,
-        tvY = (canvas.height / 2) - (height / 2) + offsetY
+        tvY = (canvas.height / 2) - (height / 2) + offsetY,
+        subImageOffsetX = 0,
+        subImageOffsetY = 0
+
+    //subImageOffsetX = 0.5 * ((this.time % 3) - 1)
+    subImageOffsetY = 0.5 * ((this.time % 3) - 1)
 
     const wDiv = this._subCanvas.width / TVBackgroundEffect.HOLE_WIDTH
 
@@ -69,7 +75,7 @@ class TVBackgroundEffect extends VideoRenderEffect {
           holeX = ((TVBackgroundEffect.HOLE_X / wDiv) * ratioX) + tvX,
           holeY = ((TVBackgroundEffect.HOLE_Y) * ratioY) + tvY
 
-    context.drawImage(this._subCanvas, holeX, holeY, holeWidth, holeHeight)
+    context.drawImage(this._subCanvas, holeX + subImageOffsetX, holeY + subImageOffsetX, holeWidth, holeHeight)
 
     context.filter = 'saturation(70%)'// brightness(129%) contrast(82%)'
 
@@ -82,6 +88,8 @@ class TVBackgroundEffect extends VideoRenderEffect {
     )
 
     context.filter = 'saturation(100%)'// brightness(100%) contrast(100%)'
+    
+    this.time++
 
     return null
   }

@@ -4,12 +4,14 @@ class TVStaticEffect extends VideoRenderEffect {
   constructor(options = {}, blendMode = BlendMode.ADDITIVE, order = VideoRenderEffect.EffectOrder.POST) {
     super(blendMode, order)
 
+    this.mode = options.mode || 0
     this.speed = options.speed || new DynamicNumber(20)
     this.opacity = options.opacity || new DynamicNumber(1)
     this.scanSize = 0
     this.scanOffsetY = 0
     this.sampleIndex = 0
     this.scaleFactor = 2.5
+    this.imageData = null
     this.time = 0
   }
 
@@ -34,8 +36,6 @@ class TVStaticEffect extends VideoRenderEffect {
       intensity.push(value)
 		}
 
-    const imageData = context.createImageData(w, h)
-
 		// for (let i = 0; i < (w * h); i++) {
 		// 	const k = i * 4
 		// 	imageData.data[k] = imageData.data[k + 1] = imageData.data[k + 2] = 0
@@ -48,11 +48,11 @@ class TVStaticEffect extends VideoRenderEffect {
   
 			// Optional: add an intensity curve to try to simulate scan lines
 			color += intensity[Math.floor(i / w)]
-			imageData.data[k] = imageData.data[k + 1] = imageData.data[k + 2] = color
-			imageData.data[k + 3] = Math.round(255 * trans)
+			this.imageData.data[k] = this.imageData.data[k + 1] = this.imageData.data[k + 2] = color
+			this.imageData.data[k + 3] = Math.round(255 * trans)
     }
 
-		return imageData
+		return this.imageData
   }
 
   _createSamples(canvas, context, width, height) {
@@ -66,7 +66,7 @@ class TVStaticEffect extends VideoRenderEffect {
   }
 
   renderFrame(canvas, context, effectStateData) {
-    if (this.scanSize == 0) {
+    /*if (this.scanSize == 0) {
       this._createSamples(canvas, context, canvas.width, canvas.height)
     }
 
@@ -77,16 +77,38 @@ class TVStaticEffect extends VideoRenderEffect {
     if (this.sampleIndex >= this.samples.length) {
       this.sampleIndex = 0
     }
+*/
 
-    // this.options.opacity = lerp(0.8, 1, (Math.sin(this.time) * 0.5 + 0.5))
-    // this.options.opacity = 1
-    // this.time += 0.2
+    if (this.imageData == null) {
+      this.imageData = context.createImageData(canvas.width, canvas.height)
+
+      if (this.mode == 0) {
+        this._createSamples(canvas, context, canvas.width, canvas.height)
+      }
+    }
+
+    let imageData = this.imageData
+
+    if (this.mode == 0) {
+      imageData = this.samples[Math.floor(this.sampleIndex)]
+
+      this.sampleIndex += this.speed.value(effectStateData) / FRAMES_PER_SECOND
+
+      if (this.sampleIndex >= this.samples.length) {
+        this.sampleIndex = 0
+      }
+    } else if (this.mode == 1) {
+      for (var i = 0; i < context.canvas.width * context.canvas.height * 4; i++) {
+        this.imageData.data[i] = ((255 * Math.random()) | 0) << 24;
+      }
+    }
+
     this.options.opacity = this.opacity.value(effectStateData)
 
     return {
       offset: [0, 0],
       size: [canvas.width, canvas.height],
-      imageData: sampleData
+      imageData
     }
   }
 }

@@ -124,20 +124,18 @@ class BouncyBallEffect extends VideoRenderEffect {
       }
     }
 
-    currentPosition = effectStateData.lyricSection.syllablePositions[`current__${currentSyllable.groupIndex}_${currentSyllable.index}`]
+    currentPosition = effectStateData.lyricSection.getSyllablePosition('current', currentSyllable.groupIndex, currentSyllable.index)
 
     if (nextSyllable == null) {
-      console.log('no null')
       nextSyllable = currentSyllable
     }
 
-    nextPosition = effectStateData.lyricSection.syllablePositions[`current__${nextSyllable.groupIndex}_${nextSyllable.index}`]
-
+    nextPosition = effectStateData.lyricSection.getSyllablePosition('current', nextSyllable.groupIndex, nextSyllable.index)
 
     // end of line, 'bounce' the marker across the screen over to the next item
     if (nextPosition == currentPosition) {
       // position of the first syllable of the next line
-      const nextLinePosition = effectStateData.lyricSection.syllablePositions['next__0_0']
+      const nextLinePosition = effectStateData.lyricSection.getSyllablePosition('next', 0, 0)
   
       if (Array.isArray(nextLinePosition)) {
         nextPosition = [canvas.width + nextLinePosition[0], currentPosition[1]]
