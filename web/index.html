@@ -277,6 +277,27 @@
         overflow-x: hidden;
       }
 
+      #markers-context-menu {
+        position: absolute;
+        z-index: 1000;
+        background: #fff;
+        box-shadow: 0 0 2px -1px rgba(0,0,0,0.22);
+      }
+      #markers-context-menu ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      #markers-context-menu li {
+        padding: 7px 2px;
+        cursor: pointer;
+        color: steelblue;
+        text-decoration: underline;
+      }
+      #markers-context-menu li:hover {
+        color: darkblue;
+      }
+
     </style>
   </head>
   <body>
@@ -321,6 +342,13 @@
 
         </div>
 
+      </div>
+
+      <div id="markers-context-menu" style="display:none">
+        <ul>
+          <li class="create-line">Create line here</li>
+          <li class="create-stanza">Create stanza here</li>
+        </ul>
       </div>
 
       <div class="lyrics">
@@ -453,6 +481,7 @@
       // no way to manipulate through UI.
       // when the project is rewritten, this can be dealt with
       const EXAMPLE_VIDEO_EFFECTS = [
+        // new BouncyBallEffect()
         new TVStaticEffect({ mode: 1, speed: new DynamicNumber(40), opacity: new DynamicNumber(0.18) }),
         new BouncyBallEffect(),
         new AnimateModifierEffect(
@@ -478,17 +507,16 @@
               ]
             ),
             new TVStaticEffect(
-              { mode: 0, speed: new DynamicNumber(25), opacity: new DynamicNumber(1) },
-              BlendMode.MULTIPLICATIVE
+              { mode: 0, speed: new DynamicNumber(25), opacity: new DynamicNumber(1) }
             ),
-            0.0,
+            0.1,
             1.0,
-            1.0,
-            3.5
+            2.5,
+            1.5
           ),
           AnimateModifierEffect.EffectType.FADE_OUT,
-          2.8,
-          0.8
+          2.5,
+          0.5
         ),
 
         new AnimateModifierEffect(
@@ -518,8 +546,8 @@
             )
           }),
           AnimateModifierEffect.EffectType.FADE_OUT,
-          (3.52 * 60),
-          (4.01 * 60) - (3.52 * 60) // yea.. nasty hardcoding based on time and length of video.
+          (3.86 * 60),
+          12 // yea.. nasty hardcoding based on time and length of video.
         )
       ]
 

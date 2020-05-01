@@ -50,6 +50,14 @@ class BouncyBallEffect extends VideoRenderEffect {
     }
   }
 
+  _blankLineTransitionLength(line) {
+    return Math.min(0.35, line.duration)
+  }
+
+  _endOfLinePosition(canvas, effectStateData) {
+    return [canvas.width - this.size[0], effectStateData.lyricSection.y + (effectStateData.lyricSection.height / 2)]
+  }
+
   renderFrame(canvas, context, effectStateData) {
     let currentSyllable = null,
         nextSyllable = null
@@ -116,45 +124,94 @@ class BouncyBallEffect extends VideoRenderEffect {
 
     let currentPosition,
         nextPosition,
-        bounceHeight = this.bounceHeight
+        bounceHeight = this.bounceHeight,
+        percentage = 0,
+        bounceToNextStanza = false,
+        currentLineBlank = false
 
-    if (currentSyllable == null) {
-      if (!(currentSyllable = this._buildSyllableObject(effectStateData.syllablesGrouped, 0, 0))) {
-        return null
+    if (effectStateData.currentLine && (effectStateData.currentLine.isBlankLine || effectStateData.currentStanza.isContextual)) {
+      const blankLineStart = effectStateData.currentStanza.getAbsoluteTimeOfLine(effectStateData.currentLine),
+            transitionLength = this._blankLineTransitionLength(effectStateData.currentLine),
+            duration = effectStateData.currentLine.duration
+
+      percentage = Math.max(0.0, effectStateData.timeSeconds - (blankLineStart + duration - transitionLength)) / transitionLength
+
+      currentLineBlank = true
+    } else if (!effectStateData.currentLine) { // start of line
+      if (effectStateData.nextLine) {
+        if (!effectStateData.nextLine.isBlankLine && !effectStateData.nextLineStanza.isContextual) {
+          const transitionLength = this._blankLineTransitionLength(effectStateData.nextLine),
+                nextLineStart = effectStateData.nextLineStanza.getAbsoluteTimeOfLine(effectStateData.nextLine)
+
+          percentage = Math.max(0, effectStateData.timeSeconds - (nextLineStart - transitionLength)) / transitionLength
+        }
       }
-    }
 
-    currentPosition = effectStateData.lyricSection.getSyllablePosition('current', currentSyllable.groupIndex, currentSyllable.index)
+      currentLineBlank = true
+    } else {
+      if (currentSyllable == null) {
+        if (!(currentSyllable = this._buildSyllableObject(effectStateData.syllablesGrouped, 0, 0))) {
+          return null
+        }
+      }
 
-    if (nextSyllable == null) {
-      nextSyllable = currentSyllable
-    }
+      percentage = currentSyllable.percentage
 
-    nextPosition = effectStateData.lyricSection.getSyllablePosition('current', nextSyllable.groupIndex, nextSyllable.index)
+      currentPosition = effectStateData.lyricSection.getSyllablePosition('current', currentSyllable.groupIndex, currentSyllable.index)
 
-    // end of line, 'bounce' the marker across the screen over to the next item
-    if (nextPosition == currentPosition) {
-      // position of the first syllable of the next line
-      const nextLinePosition = effectStateData.lyricSection.getSyllablePosition('next', 0, 0)
+      if (nextSyllable == null) {
+        nextSyllable = currentSyllable
+      }
   
-      if (Array.isArray(nextLinePosition)) {
-        nextPosition = [canvas.width + nextLinePosition[0], currentPosition[1]]
-        bounceHeight += 35
+      nextPosition = effectStateData.lyricSection.getSyllablePosition('current', nextSyllable.groupIndex, nextSyllable.index)
+
+      // end of line, 'bounce' the marker across the screen over to the next item
+      if (nextPosition == currentPosition) {
+        bounceToNextStanza = true
       }
     }
 
-    let position = [
-      lerp(
-        currentPosition[0],
-        nextPosition[0],
-        currentSyllable.percentage
-      ),
-      lerp(
-        currentPosition[1] - effectStateData.lyricSection.height - bounceHeight,
-        currentPosition[1] - effectStateData.lyricSection.height,
-        Math.max(0.0, Math.min(1.0, Math.abs((currentSyllable.percentage) * 2.0 - 1.0)))
-      )
-    ]
+    if (percentage === 0.0) {
+      // no need to render on screen when it would just be sitting on the side
+      return null
+    }
+
+    if (currentLineBlank) {
+      currentPosition = this._endOfLinePosition(canvas, effectStateData)
+    }
+
+    if (bounceToNextStanza || currentLineBlank) {
+      // position of the first syllable of the next line
+
+      if (effectStateData.nextLine) {
+        if (effectStateData.nextLine.isBlankLine || effectStateData.nextLineStanza.isContextual) {
+          nextPosition = this._endOfLinePosition(canvas, effectStateData)
+        } else {
+          const nextLinePosition = effectStateData.lyricSection.getSyllablePosition('next', 0, 0)
+
+          if (Array.isArray(nextLinePosition) && nextLinePosition.length == 2) {
+            nextPosition = [canvas.width + nextLinePosition[0], currentPosition[1] + 35]
+          }
+        }
+      }
+    }
+
+    let position = currentPosition
+    
+    if (nextPosition != null && Array.isArray(nextPosition) && nextPosition.length === 2) {
+      position = [
+        lerp(
+          currentPosition[0],
+          nextPosition[0],
+          percentage
+        ),
+        lerp(
+          currentPosition[1] - effectStateData.lyricSection.height - bounceHeight,
+          currentPosition[1] - effectStateData.lyricSection.height,
+          Math.max(0.0, Math.min(1.0, Math.abs((percentage) * 2.0 - 1.0)))
+        )
+      ]
+    }
 
     if (this.imageData === null) {
       this._createImageData(context)

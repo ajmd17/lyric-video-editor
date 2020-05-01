@@ -1,6 +1,5 @@
 class RenderState {
   static DEFAULT_RENDER_PROPERTIES = {
-    'renderDashes': false,
     'timeSeconds': 0,
     'totalDuration': null,
     'lyrics': null,
@@ -11,6 +10,8 @@ class RenderState {
     'syllablePercentages': [],
     'syllablesGrouped': [],
     'lyricSection': null,
+    'prevLine': null,
+    'nextLineStanza': null,
     'nextLine': null,
     'nextLineIndex': -1,
     'nextLineSyllablePercentages': [],

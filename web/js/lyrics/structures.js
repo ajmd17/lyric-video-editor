@@ -24,7 +24,8 @@ class Lyrics {
   }
 
   updateStanzaDurations(videoDuration) {
-    _.sortBy(_.map(this.stanzas, (stanza, index) => ({ stanza, index })), 'stanza.offset').forEach(({ stanza, index }) => {
+    _.sortBy(this.stanzas, 'offset').forEach((stanza, index) => {
+      console.log(index, stanza)
       let stanzaDuration
 
       if (index == this.stanzas.length - 1) {
@@ -66,7 +67,8 @@ class Stanza {
     UNSET: 0,
     VERSE: 1,
     CHORUS: 2,
-    BRIDGE: 3
+    BRIDGE: 3,
+    CONTEXTUAL: 10
   }
 
   constructor(stanza, type = Stanza.Type.UNSET, duration = 0, offset = 0) {
@@ -134,12 +136,23 @@ class Stanza {
 
   toJSON() {
     return {
+      type: this.type,
       offset: parseFloat(this.offset.toFixed(2)),
       duration: parseFloat(this.duration.toFixed(2)),
       lines: this.lines.map((line) => line.toJSON())
     }
   }
 }
+
+Object.keys(Stanza.Type).forEach((typeKey) => {
+  Stanza.Type[Stanza.Type[typeKey]] = typeKey
+
+  Object.defineProperty(Stanza.prototype, _.camelCase(`IS_${typeKey}`), {
+    get: function () {
+      return this.type === Stanza.Type[typeKey]
+    }
+  })
+})
 
 class Line {
   constructor(line, duration = 0, offset = 0) {
@@ -150,6 +163,10 @@ class Line {
 
     /** @type {string[]} */
     this.syllables = this._buildSyllables()
+  }
+
+  get isBlankLine() {
+    return _.isEmpty(this.syllables)
   }
 
   setContent(line) {
@@ -219,10 +236,14 @@ class Line {
   }
 
   _buildSyllables() {
-    return _.flatten(_.map(syllables(this.originalLine), (syllables) => {
-      const wholeWord = syllables.join('')
+    return _.flatten(_.map(syllables(this.originalLine), (s) => {
+      if (_.isString(s)) {
+        return new Syllable(s, s)
+      }
 
-      return syllables.map(syllable => new Syllable(syllable, wholeWord))
+      const wholeWord = s.join('')
+
+      return s.map(syllable => new Syllable(syllable, wholeWord))
     }))
   }
 
@@ -242,6 +263,10 @@ class Syllable {
     this.originalWord = originalWord
     this.duration = _.isNumber(duration) ? Math.max(0, duration) : 0
     this.offset = _.isNumber(offset) ? Math.max(0, offset) : 0
+  }
+
+  get stringValue() {
+    return String(this.syllable).toUpperCase()
   }
 
   toJSON() {
