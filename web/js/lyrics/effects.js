@@ -47,7 +47,7 @@ const blendCombineFunc = {
   },
   [BlendMode.NO_TRANSPARENCY]: (lhs, rhs, lhsIndex, rhsIndex) => {
     for (let i = 0; i < 3; i++) {
-      lhs[i + lhsIndex] = rhs[i + rhsIndex] * (rhs[rhsIndex + 3] / 255)
+      lhs[i + lhsIndex] = rhs[i + rhsIndex]
     }
 
     lhs[lhsIndex + 3] = 255
@@ -83,13 +83,21 @@ class EffectResult {
         
         let prevValues = [imageData.data[outputIndex], imageData.data[outputIndex + 1], imageData.data[outputIndex + 2], imageData.data[outputIndex + 3]]
 
+        if (this.blendMode == BlendMode.NO_TRANSPARENCY) {
+          prevValues = [0, 0, 0, 0]
+        }
+
         blendCombineFunc[this.blendMode](imageData.data, this.resultData.data, outputIndex, thisIndex)
 
-        if (opacity < 1.0 && this.blendMode != BlendMode.NO_TRANSPARENCY) {
+        if (opacity < 1.0) {
           imageData.data[outputIndex]     = lerp(prevValues[0], imageData.data[outputIndex], opacity)
           imageData.data[outputIndex + 1] = lerp(prevValues[1], imageData.data[outputIndex + 1], opacity)
           imageData.data[outputIndex + 2] = lerp(prevValues[2], imageData.data[outputIndex + 2], opacity)
           imageData.data[outputIndex + 3] = lerp(prevValues[3], imageData.data[outputIndex + 3], opacity)
+        }
+
+        if (this.blendMode == BlendMode.NO_TRANSPARENCY) {
+          imageData.data[outputIndex + 3] = 255
         }
       }
     }

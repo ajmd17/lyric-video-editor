@@ -5,10 +5,23 @@ cvg = (function() {
 
   var frameCount = -1;
 
-  self.addFrame = function(canvas) {
+  self.begin = function () {
+    return fetch(AUTHORITY + '/cvg/begin', {
+      method: 'post',
+      headers: { 'Content-Type': 'application/json' }
+    }).then((result) => {
+      return result.text().then((text) => {
+        return text
+      })
+    }).catch((err) => {
+      console.error(err)
+    })
+  }
+
+  self.addFrame = function(canvas, uuid) {
     frameCount++;
 
-    return fetch(AUTHORITY + '/cvg/addFrame', {
+    return fetch(AUTHORITY + '/cvg/addFrame?uuid=' + uuid, {
       method: 'post',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -20,10 +33,10 @@ cvg = (function() {
     })
   }
 
-  self.render = function(filename, fps = 60) {
+  self.render = function(uuid, filename, fps = 60) {
     filename = filename || 'untitled';
 
-    return fetch(AUTHORITY + '/cvg/render', {
+    return fetch(AUTHORITY + '/cvg/render?uuid=' + uuid, {
       method: 'post',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

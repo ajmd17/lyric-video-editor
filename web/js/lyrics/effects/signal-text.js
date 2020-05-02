@@ -23,7 +23,7 @@ class SignalTextEffect extends VideoRenderEffect {
     { "x": 1, "y": 2, "redShadowX": 3, "blueShadowX": -3 }
   ]
 
-  constructor(text, textX = new DynamicNumber(0), textY = new DynamicNumber(0), fontSize = 40, movement = 0.3, blendMode = BlendMode.NORMAL_MUL_ALPHA, order = VideoRenderEffect.EffectOrder.POST, options = { opacity: 1.0 }) {
+  constructor(text, textX = new DynamicNumber(0), textY = new DynamicNumber(0), fontSize = 40, movement = 0.14, blendMode = BlendMode.NORMAL_MUL_ALPHA, order = VideoRenderEffect.EffectOrder.POST, options = { opacity: 1.0 }) {
     super(blendMode, order, options)
 
     this.text = text
@@ -55,6 +55,10 @@ class SignalTextEffect extends VideoRenderEffect {
 
     this._subContext.clearRect(0, 0, this._subCanvas.width, this._subCanvas.height)
 
+    this._subContext.shadowOffsetX = 0
+    this._subContext.shadowOffsetY = 0
+    this._subContext.shadowColor = 'rgba(0, 0, 0, 0.3)'
+    this._subContext.shadowBlur = 2
     this._subContext.fillStyle = '#00f'
     this._subContext.font = `${this.fontSize}px "VCR"`
 

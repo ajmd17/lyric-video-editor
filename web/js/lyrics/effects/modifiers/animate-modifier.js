@@ -25,21 +25,21 @@ class AnimateModifierEffect extends VideoRenderEffect {
   }
 
   _fadeOut(canvas, context, effectStateData) {
-    if (effectStateData.timeSeconds < this.timeStart) {
-      return this.effect.render(canvas, context, effectStateData)
-    }
-
     if (effectStateData.timeSeconds > this.timeStart + this.duration) {
       return null
     }
 
-    const percentage = (effectStateData.timeSeconds - this.timeStart) / this.duration,
-          opacity = 1 - Math.pow(percentage, 2)
-
-    let effectResult = this.effect.render(canvas, context, effectStateData)
+    let effectResult = this.effect.render(canvas, context, effectStateData),
+        opacity = 1.0,
+        percentage = 0
 
     if (effectResult === null) {
       return null
+    }
+
+    if (effectStateData.timeSeconds >= this.timeStart) { 
+      percentage = (effectStateData.timeSeconds - this.timeStart) / this.duration
+      opacity = 1 - Math.pow(percentage, 2)
     }
 
     return new EffectResult(

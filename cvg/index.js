@@ -9,6 +9,13 @@ var tmp = require('tmp');
 var cp = require('child_process');
 var fs = require('fs');
 
+function uuidv4() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 var args = minimist(process.argv.slice(2));
 if (args.h || args.help) {
   console.log('usage: cvg [options]');
@@ -27,7 +34,8 @@ var NOCLEAN = args.n || args.noclean || false;
 
 
 var app = express.Router();
-tempDir = tmp.dirSync({unsafeCleanup: true});
+
+const tempDirs = {}
 
 
 app.use(function(req, res, next) {
@@ -55,11 +63,28 @@ app.get('/cvg.js', function (req, res) {
 
 let fileWritePromises = {}
 
+app.post('/begin', function (req, res) {
+  const id = uuidv4(),
+        dir = tmp.dirSync({ prefix: id, unsafeCleanup: true })
+        
+  tempDirs[id] = dir
+
+  res.send(id)
+})
+
 app.post('/addFrame', function(req, res) {
+  if (!req.query.uuid) {
+    return res.status(400).send('uuid unprovided')
+  }
+
+  if (!tempDirs[req.query.uuid]) {
+    return res.status(400).send('Not a valid temp dir')
+  }
+
   var data = req.body.png.replace(/^data:image\/png;base64,/, "");
   var filename = sprintf('image-%010d.png', parseInt(req.body.frame));
   fileWritePromises[filename] = new Promise((resolve, reject) => {
-    fs.writeFile(sprintf('%s/%s', tempDir.name, filename), data, 'base64', () => {
+    fs.writeFile(sprintf('%s/%s', tempDirs[req.query.uuid].name, filename), data, 'base64', () => {
       process.stdout.write(sprintf('Recieved frame %s\r', String(req.body.frame)));
       delete fileWritePromises[filename]
       resolve()
@@ -70,13 +95,22 @@ app.post('/addFrame', function(req, res) {
 
 
 app.post('/render', function(req, res) {
+  if (!req.query.uuid) {
+    return res.status(400).send('uuid unprovided')
+  }
+
+  if (!tempDirs[req.query.uuid]) {
+    return res.status(400).send('Not a valid temp dir')
+  }
+
   const fps = req.params.fps || req.body.fps || 60
 
   // hardcoded for now -- maybe s3 or just direct file uploading could come later
   const audioPath = path.join(__dirname, '../web/example_data/sucker_punch.wav')
 
   Promise.all(Object.values(fileWritePromises)).then(() => {
-    var oldTemp = tempDir;
+    var oldTemp = tempDirs[req.query.uuid]
+
     console.log("Begining rendering of your video. This might take a long time...")
 
     var ffmpeg = cp.spawn('ffmpeg', [
@@ -104,8 +138,10 @@ app.post('/render', function(req, res) {
         console.log(sprintf('Cleaning up temp files in %s', oldTemp.name));
         oldTemp.removeCallback();
       }
+
+      delete tempDirs[req.query.uuid]
     });
-    tempDir = tmp.dirSync({unsafeCleanup: true});
+
     res.end();
   }).catch((err) => {
     res.status(err).send('error rendering: ' + err.message)

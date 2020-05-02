@@ -1,5 +1,7 @@
 // a bouncy ball that follows the active syllable
 class BouncyBallEffect extends VideoRenderEffect {
+  static NEW_STANZA_BOUNCE_HEIGHT = 60
+
   constructor(radius = 8, bounceHeight = 10) {
     super(BlendMode.NORMAL_MUL_ALPHA, VideoRenderEffect.EffectOrder.POST)
 
@@ -122,6 +124,8 @@ class BouncyBallEffect extends VideoRenderEffect {
       }
     })
 
+    console.log('current syllable', currentSyllable)
+
     let currentPosition,
         nextPosition,
         bounceHeight = this.bounceHeight,
@@ -171,26 +175,33 @@ class BouncyBallEffect extends VideoRenderEffect {
       }
     }
 
-    if (percentage === 0.0) {
-      // no need to render on screen when it would just be sitting on the side
-      return null
-    }
-
     if (currentLineBlank) {
       currentPosition = this._endOfLinePosition(canvas, effectStateData)
+      // percentage = percentage * 0.5 + 0.5
     }
 
+    let bounceFormula = Math.max(0.0, Math.min(1.0, Math.abs((percentage) * 2.0 - 1.0)))
+
     if (bounceToNextStanza || currentLineBlank) {
-      // position of the first syllable of the next line
+      if (percentage <= 0.0) {
+        // no need to render on screen when it would just be sitting on the side
+        return null
+      }
+      if (currentLineBlank) {
+        bounceHeight += BouncyBallEffect.NEW_STANZA_BOUNCE_HEIGHT
+      }
 
       if (effectStateData.nextLine) {
         if (effectStateData.nextLine.isBlankLine || effectStateData.nextLineStanza.isContextual) {
-          nextPosition = this._endOfLinePosition(canvas, effectStateData)
+          nextPosition = [canvas.width - this.size[0], currentPosition[1]]
+          bounceFormula = Math.pow(1 - Math.max(0.0, Math.min(1.0, percentage)), 2)
+          bounceHeight += BouncyBallEffect.NEW_STANZA_BOUNCE_HEIGHT
         } else {
           const nextLinePosition = effectStateData.lyricSection.getSyllablePosition('next', 0, 0)
+          bounceFormula = Math.max(0.0, Math.min(1.0, percentage * percentage))
 
           if (Array.isArray(nextLinePosition) && nextLinePosition.length == 2) {
-            nextPosition = [canvas.width + nextLinePosition[0], currentPosition[1] + 35]
+            nextPosition = [canvas.width - this.size[0] + nextLinePosition[0], nextLinePosition[1]]
           }
         }
       }
@@ -208,7 +219,7 @@ class BouncyBallEffect extends VideoRenderEffect {
         lerp(
           currentPosition[1] - effectStateData.lyricSection.height - bounceHeight,
           currentPosition[1] - effectStateData.lyricSection.height,
-          Math.max(0.0, Math.min(1.0, Math.abs((percentage) * 2.0 - 1.0)))
+          Math.max(0, Math.min(bounceFormula, 1))
         )
       ]
     }

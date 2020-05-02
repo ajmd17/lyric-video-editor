@@ -84,3 +84,11 @@ class Proc extends DynamicValue {
     return this.fun(effectStateData)
   }
 }
+
+class VideoCurrentTimeValue extends Proc {
+  constructor(startTime, duration) {
+    super((effectStateData) => {
+      return duration * (Math.max(0, effectStateData.timeSeconds - startTime) / duration)
+    })
+  }
+}

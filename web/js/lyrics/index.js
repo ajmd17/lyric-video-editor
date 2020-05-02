@@ -1,7 +1,8 @@
 const PIXELS_PER_SEC = 50,
   FRAMES_PER_SECOND = 20,
   VIDEO_RENDER_HEIGHT = 720,
-  VIDEO_RENDER_WIDTH = 1080
+  VIDEO_RENDER_WIDTH = 1080,
+  LYRIC_FONT = '22px "VCR"'
 
 
 class AudioManipulator {
@@ -359,13 +360,13 @@ class LyricsBuilder {
       if (nextStanza != null && !_.isEmpty(nextStanza.lines)) {
         nextLineIndex = 0
       }
-    } else if (currentLineIndex == currentStanza.lines.length - 1) {
+    } else if (currentLineIndex >= currentStanza.lines.length - 1) {
       if (stanzaIndex === -1) {
         throw Error('stanza not in lyrics object')
       }
 
-      if (stanzaIndex === this._currentLyricsObject.stanzas.length - 1) {
-        nextStanza = currentStanza
+      if (stanzaIndex >= this._currentLyricsObject.stanzas.length - 1) {
+        return null // out of bounds
       } else {
         nextStanza = this._currentLyricsObject.stanzas[stanzaIndex + 1]
       }
@@ -424,129 +425,129 @@ class LyricsBuilder {
          )
       })
 
-      const updateStateData = () => {
-        const videoPercentage = currentFrame / totalFrames
+    const updateStateData = () => {
+      const videoPercentage = currentFrame / totalFrames
 
-        stateData.lyrics = self._currentLyricsObject
-        stateData.currentBackgroundImage = self._videoBackgroundImage[0]
-        stateData.timeSeconds = videoPercentage * self._totalDuration
+      stateData.lyrics = self._currentLyricsObject
+      stateData.currentBackgroundImage = self._videoBackgroundImage[0]
+      stateData.timeSeconds = videoPercentage * self._totalDuration
 
-        const currentLineObject = self._getCurrentLine(stateData.timeSeconds)
+      const currentLineObject = self._getCurrentLine(stateData.timeSeconds)
 
-        if (currentLineObject.currentLineIndex !== -1) {
-          stateData.currentLine = currentLineObject.currentLine
-          stateData.currentLineIndex = currentLineObject.currentLineIndex
-        }
-
-        stateData.currentStanza = currentLineObject.currentStanza
-
-        // stateData.currentStanza = self._currentLyricsObject.stanzaAtTime(stateData.timeSeconds)
-        // stateData.currentLineIndex = stateData.currentStanza != null
-        //   ? stateData.currentStanza.lineIndexAtTime(stateData.timeSeconds)
-        //   : -1
-        // stateData.currentLine = stateData.currentLineIndex != -1
-        //   ? stateData.currentStanza.lines[stateData.currentLineIndex]
-        //   : null
-        stateData.syllablePercentages = stateData.currentLine != null
-          ? stateData.currentLine.syllablePercentagesAtTime(stateData.timeSeconds, stateData.currentStanza.offset)
-          : []
-        stateData.syllablesGrouped = stateData.syllablePercentages.length != 0
-          ? self._groupSyllables(stateData.syllablePercentages)
-          : []
-
-        const nextLineObject = self._getNextLine(
-          stateData.currentLineIndex,
-          stateData.currentStanza,
-          stateData.timeSeconds
-        )
-
-        if (nextLineObject) {
-          const { nextLine, nextLineIndex, nextStanza } = nextLineObject
-
-          stateData.nextLineStanza = nextStanza
-          stateData.nextLine = nextLine
-          stateData.nextLineIndex = nextLineIndex
-
-          stateData.nextLineSyllablePercentages = stateData.nextLine != null
-            ? stateData.nextLine.syllablePercentagesAtTime(nextStanza.getAbsoluteTimeOfLine(stateData.nextLine), nextStanza.offset)
-            : []
-          stateData.nextLineSyllablesGrouped = self._groupSyllables(stateData.nextLineSyllablePercentages)
-        } else {
-          stateData.nextLineStanza = null
-          stateData.nextLine = null
-          stateData.nextLineIndex = -1
-          stateData.nextLineSyllablePercentages = []
-          stateData.nextLineSyllablesGrouped = []
-        }
+      if (currentLineObject.currentLineIndex !== -1) {
+        stateData.currentLine = currentLineObject.currentLine
+        stateData.currentLineIndex = currentLineObject.currentLineIndex
       }
+
+      stateData.currentStanza = currentLineObject.currentStanza
+
+      // stateData.currentStanza = self._currentLyricsObject.stanzaAtTime(stateData.timeSeconds)
+      // stateData.currentLineIndex = stateData.currentStanza != null
+      //   ? stateData.currentStanza.lineIndexAtTime(stateData.timeSeconds)
+      //   : -1
+      // stateData.currentLine = stateData.currentLineIndex != -1
+      //   ? stateData.currentStanza.lines[stateData.currentLineIndex]
+      //   : null
+      stateData.syllablePercentages = stateData.currentLine != null
+        ? stateData.currentLine.syllablePercentagesAtTime(stateData.timeSeconds, stateData.currentStanza.offset)
+        : []
+      stateData.syllablesGrouped = stateData.syllablePercentages.length != 0
+        ? self._groupSyllables(stateData.syllablePercentages)
+        : []
+
+      const nextLineObject = self._getNextLine(
+        stateData.currentLineIndex,
+        stateData.currentStanza,
+        stateData.timeSeconds
+      )
+
+      if (nextLineObject) {
+        const { nextLine, nextLineIndex, nextStanza } = nextLineObject
+
+        stateData.nextLineStanza = nextStanza
+        stateData.nextLine = nextLine
+        stateData.nextLineIndex = nextLineIndex
+
+        stateData.nextLineSyllablePercentages = stateData.nextLine != null
+          ? stateData.nextLine.syllablePercentagesAtTime(nextStanza.getAbsoluteTimeOfLine(stateData.nextLine), nextStanza.offset)
+          : []
+        stateData.nextLineSyllablesGrouped = self._groupSyllables(stateData.nextLineSyllablePercentages)
+      } else {
+        stateData.nextLineStanza = null
+        stateData.nextLine = null
+        stateData.nextLineIndex = -1
+        stateData.nextLineSyllablePercentages = []
+        stateData.nextLineSyllablesGrouped = []
+      }
+    }
+
+    updateStateData()
+
+    const renderEffect = (videoEffect) => {
+      const result = videoEffect.render(self._renderingCanvas, ctx, stateData)
+
+      if (result === null) {
+        // no data returned, do not use
+        return
+      }
+
+      const combinedData = ctx.getImageData(0, 0, self._renderingCanvas.width, self._renderingCanvas.height)
+
+      result.applyToImageData(combinedData, self._renderingCanvas)
+
+      ctx.putImageData(combinedData, 0, 0)
+    }
+
+    function renderTick(uuid) {
+      frameCount++;
 
       updateStateData()
 
-      const renderEffect = (videoEffect) => {
-        const result = videoEffect.render(self._renderingCanvas, ctx, stateData)
+      try {
+        if (frameCount >= totalFrames) {
+          self._renderVideoStatusLabel.html('Rendering on server ...')
 
-        if (result === null) {
-          // no data returned, do not use
+          cvg.render(uuid, `lyrics_video_${Date.now()}`, FRAMES_PER_SECOND)
+
+          self.rendering = false
+
           return
         }
 
-        const combinedData = ctx.getImageData(0, 0, self._renderingCanvas.width, self._renderingCanvas.height)
+        self._renderVideoStatusLabel.html(`Rendering frame (${frameCount}/${totalFrames}) ...`)
 
-        result.applyToImageData(combinedData, self._renderingCanvas)
+        ctx.fillStyle = 'black'
+        ctx.fillRect(
+          0, 0,
+          self._renderingCanvas.width, self._renderingCanvas.height
+        )
 
-        ctx.putImageData(combinedData, 0, 0)
+        _.filter(videoEffects, (effect) => effect.order == VideoRenderEffect.EffectOrder.PRE)
+          .forEach(renderEffect)
+
+        self._renderFrame(ctx, backgroundImagePlacement, stateData)
+
+        _.filter(videoEffects, (effect) => effect.order == VideoRenderEffect.EffectOrder.POST)
+          .forEach(renderEffect)
+
+        cvg.addFrame(self._renderingCanvas, uuid)
+
+        currentFrame = frameCount
+
+        requestAnimationFrame(() => renderTick(uuid))
+      } catch (err) {
+        console.error(err)
+        alert('Renderer error: ' + err.toString())
+
+        self.rendering = false
       }
-
-      function renderTick() {
-        frameCount++;
-
-        updateStateData()
-
-        try {
-          if (frameCount >= totalFrames) {
-            self._renderVideoStatusLabel.html('Rendering on server ...')
-
-            cvg.render(`lyrics_video_${Date.now()}`)
-
-            self.rendering = false
-
-            return
-          }
-
-          self._renderVideoStatusLabel.html(`Rendering frame (${frameCount}/${totalFrames}) ...`)
-
-          ctx.fillStyle = 'black'
-          ctx.fillRect(
-            0, 0,
-            self._renderingCanvas.width, self._renderingCanvas.height
-          )
-
-          _.filter(videoEffects, (effect) => effect.order == VideoRenderEffect.EffectOrder.PRE)
-            .forEach(renderEffect)
-
-          self._renderFrame(ctx, backgroundImagePlacement, stateData)
-
-          _.filter(videoEffects, (effect) => effect.order == VideoRenderEffect.EffectOrder.POST)
-            .forEach(renderEffect)
-
-          cvg.addFrame(self._renderingCanvas)
-
-          currentFrame = frameCount
-
-          requestAnimationFrame(renderTick)
-        } catch (err) {
-          console.error(err)
-          alert('Renderer error: ' + err.toString())
-
-          self.rendering = false
-        }
-      }
+    }
 
     let waitInterval,
         waitTicksRemaining = 5
 
     waitInterval = setInterval(() => {
-      ctx.font = '28px "VCR"'
+      ctx.font = LYRIC_FONT
       ctx.fillText('Waiting...', 50, 50)
 
       this._renderVideoStatusLabel.html(`Allowing some buffering time to pre-load assets (${waitTicksRemaining}s)`)
@@ -556,9 +557,9 @@ class LyricsBuilder {
       if (waitTicksRemaining == 0) {
         clearInterval(waitInterval)
 
-        setTimeout(() => {
-          requestAnimationFrame(renderTick)
-        }, 1000)
+        cvg.begin().then((uuid) => {
+          requestAnimationFrame(() => renderTick(uuid))
+        })
       }
     }, 1000)
   }
@@ -600,7 +601,12 @@ class LyricsBuilder {
     let textPosition = (canvas.width / 2) - (totalTextWidth / 2)
 
     if (stanza.type in this.options.lineDecorators) {
+      let syllableX = textPosition + textOffset,
+          syllableY = stateData.lyricSection.y + (stateData.lyricSection.height / 2)
+      
       textOffset += context.measureText(this.options.lineDecorators[stanza.type] + ' ').width
+
+      stateData.lyricSection.setSyllablePosition(prefix, 'dec', 0, syllableX, syllableY)
     }
 
     syllablesGrouped.forEach((group, groupIndex) => {
@@ -625,7 +631,12 @@ class LyricsBuilder {
     })
 
     if (stanza.type in this.options.lineDecorators) {
+      let syllableX = textPosition + textOffset,
+          syllableY = stateData.lyricSection.y + (stateData.lyricSection.height / 2)
+
       textOffset += context.measureText(' ' + this.options.lineDecorators[stanza.type]).width
+
+      stateData.lyricSection.setSyllablePosition(prefix, 'dec', 1, syllableX, syllableY)
     }
 
     return {
@@ -635,7 +646,7 @@ class LyricsBuilder {
   }
 
   _renderFrame(ctx, backgroundImagePlacement, stateData) {    
-    ctx.font = '28px "VCR"'
+    ctx.font = LYRIC_FONT
 
     if (backgroundImagePlacement != null) {
       ctx.drawImage(
@@ -666,6 +677,7 @@ class LyricsBuilder {
         'current'
       )
 
+
       syllablesGrouped = stateData.syllablesGrouped
       preTransitionPercentage = stateData.syllablePercentages.length != 0
         ? stateData.syllablePercentages[stateData.syllablePercentages.length - 1][1]
@@ -686,7 +698,7 @@ class LyricsBuilder {
       if (stateData.currentLine === null || (stateData.currentLine.isBlankLine || stateData.currentStanza.isContextual)) {
         const transitionLength = 0.5,
               nextLineStart = stateData.nextLineStanza.getAbsoluteTimeOfLine(stateData.nextLine)
-
+        console.log('nextLine : ', stateData.nextLine)
         preTransitionPercentage = Math.max(0, stateData.timeSeconds - (nextLineStart - transitionLength)) / transitionLength
       }
     }
@@ -719,8 +731,14 @@ class LyricsBuilder {
 
     ctx.fillStyle = '#fff'
 
+    // console.log('currentline = ', stateData.currentLine)
+    // console.log('currentstanza = ', stateData.currentStanza)
+    // console.log('syllablesGrouped = ', syllablesGrouped)
+    // console.log('preTransitionPercentage = ', preTransitionPercentage)
+
     if (stanza.type in this.options.lineDecorators) {
-      textOffset += context.measureText(this.options.lineDecorators[stanza.type] + ' ').width
+      let [syllableX, syllableY] = stateData.lyricSection.getSyllablePosition(positionsKey, 'dec', 0)
+      ctx.fillText(this.options.lineDecorators[stanza.type] + ' ', syllableX, syllableY)
     }
 
     syllablesGrouped.forEach((group, groupIndex) => {
@@ -738,6 +756,11 @@ class LyricsBuilder {
         ctx.fillText(part, syllableX, syllableY)
       })
     })
+
+    if (stanza.type in this.options.lineDecorators) {
+      let [syllableX, syllableY] = stateData.lyricSection.getSyllablePosition(positionsKey, 'dec', 1)
+      ctx.fillText(' ' + this.options.lineDecorators[stanza.type], syllableX, syllableY)
+    }
   }
 
   _groupSyllables(frameSyllablePercentages) {

@@ -25,20 +25,10 @@ class BlendDeltaModifierEffect extends VideoRenderEffect {
   }
 
   renderFrame(canvas, context, effectStateData) {
-
     let animEffectResult = this.animateModifier.render(canvas, context, effectStateData)
     let targetEffectResult = this.blendModifier1.render(canvas, context, effectStateData).clone()
 
-    // console.log('b1 = ', targetEffectResult.options.opacity)
-    // if (effectStateData.timeSeconds < this.startTime) {
-    //   return this.blendModifier0.render(canvas, context, effectStateData)
-    // }
-
-    // if (effectStateData.timeSeconds > this.startTime + this.duration) {
-    //   return targetEffectResult
-    // }
-
-    if (animEffectResult != null) {
+    if (animEffectResult) {
       animEffectResult.applyToImageData(targetEffectResult.resultData, canvas)
     }
 
@@ -47,7 +37,7 @@ class BlendDeltaModifierEffect extends VideoRenderEffect {
       targetEffectResult.resultData,
       targetEffectResult.offset,
       targetEffectResult.size,
-      { opacity: targetEffectResult.options.opacity }
+      { opacity: this.options.opacity }
     )
   }
 }
